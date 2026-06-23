@@ -1,0 +1,42 @@
+{
+  "originHash" : "c0b9f8174d5cdeb77a87c0c0c27f92a457c998b86a3f2d0f1c8a384d33417c57",
+  "pins" : [
+    {
+      "identity" : "swift-concurrency-extras",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pointfreeco/swift-concurrency-extras",
+      "state" : {
+        "revision" : "a90e2e40a7a840a853dd29e57cbef5dbb72c9d5b",
+        "version" : "1.4.0"
+      }
+    },
+    {
+      "identity" : "swiftui-flow",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/tevelee/SwiftUI-Flow",
+      "state" : {
+        "revision" : "798364823cdfc6afb4aff43eff5a3ddbca89b54f",
+        "version" : "3.4.0"
+      }
+    },
+    {
+      "identity" : "swiftui-math",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/gonzalezreal/swiftui-math",
+      "state" : {
+        "revision" : "0b5c2cfaaec8d6193db206f675048eeb5ce95f71",
+        "version" : "0.1.0"
+      }
+    },
+    {
+      "identity" : "textual",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/adamtheturtle/textual",
+      "state" : {
+        "revision" : "bd1425540075bd5e3d00f37abb0849eaad2c38ec",
+        "version" : "0.3.1-coderpad.2"
+      }
+    }
+  ],
+  "version" : 3
+}
