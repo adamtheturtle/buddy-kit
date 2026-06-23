@@ -45,7 +45,7 @@ let package = Package(
         .package(url: "https://github.com/tevelee/SwiftUI-Flow", from: "3.4.0"),
         // Backs the reusable `MarkdownText` view. Pinned to the exact version the apps
         // use so everything resolves to one Textual revision.
-        .package(url: "https://github.com/adamtheturtle/textual", exact: "0.3.1-coderpad.2")
+        .package(url: "https://github.com/adamtheturtle/textual", exact: "0.5.1")
     ],
     targets: [
         .target(
