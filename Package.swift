@@ -45,14 +45,19 @@ let package = Package(
         .package(url: "https://github.com/tevelee/SwiftUI-Flow", from: "3.4.0"),
         // Backs the reusable `MarkdownText` view. Pinned to the exact version the apps
         // use so everything resolves to one Textual revision.
-        .package(url: "https://github.com/adamtheturtle/textual", exact: "0.3.1-coderpad.2")
+        .package(url: "https://github.com/adamtheturtle/textual", exact: "0.3.1-coderpad.2"),
+        // Backs the `ListTable` (NSTableView-backed) list, extracted into its own OSS
+        // package so the engine has a single source of truth. The `ListTable` here is a
+        // thin compatibility wrapper that preserves buddy-kit's API over FastList.
+        .package(url: "https://github.com/adamtheturtle/FastList", from: "0.1.0")
     ],
     targets: [
         .target(
             name: "BuddyDesignSystem",
             dependencies: [
                 .product(name: "Flow", package: "SwiftUI-Flow"),
-                .product(name: "Textual", package: "textual")
+                .product(name: "Textual", package: "textual"),
+                .product(name: "FastList", package: "FastList")
             ],
             swiftSettings: buddySwiftSettings
         ),

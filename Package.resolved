@@ -1,6 +1,15 @@
 {
-  "originHash" : "c0b9f8174d5cdeb77a87c0c0c27f92a457c998b86a3f2d0f1c8a384d33417c57",
+  "originHash" : "a913884334e81b0c4418d2393642f22458f6a975534fb61b31caaed83c8a71bc",
   "pins" : [
+    {
+      "identity" : "fastlist",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/adamtheturtle/FastList",
+      "state" : {
+        "revision" : "84ceb340b517705d0300231c485fa5e60376adc4",
+        "version" : "0.1.0"
+      }
+    },
     {
       "identity" : "swift-concurrency-extras",
       "kind" : "remoteSourceControl",
