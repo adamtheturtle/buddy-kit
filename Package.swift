@@ -18,7 +18,8 @@ let buddySwiftSettings: [SwiftSetting] = [
 ///
 /// - `BuddyDesignSystem` — generic SwiftUI primitives: colour/spacing tokens, the
 ///   reusable cards/section-headers/stat-tiles/chips/avatars, the `FilterChipMenu`
-///   family, `FilterableListView`, and the `ListTable` (NSTableView-backed) list.
+///   family, and `FilterableListView`. (The NSTableView-backed list now lives in the
+///   standalone FastList package: https://github.com/adamtheturtle/FastList.)
 /// - `PaginatedRESTClient` — a generic transport for paginated, bearer-authenticated
 ///   REST APIs.
 /// - `BuddyAppKit` — zero-coupling app utilities (pasteboard, URL opening,
