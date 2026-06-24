@@ -28,6 +28,11 @@ public protocol StorableAccount {
 @Observable
 @MainActor
 public final class KeychainAccountStore<Account: StorableAccount> {
+    // Workaround: Xcode 26.5's optimizer crashes on this generic @Observable
+    // class's synthesized deinit; opt this type's deinit out of optimization.
+    @_optimize(none)
+    deinit {}
+
     /// The injected serialization, side-effects, and storage keys that adapt the generic
     /// store to a particular app. Closures run on the main actor (the store is
     /// main-actor bound), so the account model's main-actor-isolated `Codable` is usable
