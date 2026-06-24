@@ -9,46 +9,56 @@
 //  saved-search) stay app-side and build on the public `ChipMenuShell`.
 //
 
-import AppKit
+#if os(macOS)
+    import AppKit
+#endif
 import SwiftUI
 
-/// Strips the AppKit keyboard focus ring from the control backing a button-styled
-/// `Menu`. SwiftUI's `.focusEffectDisabled()` governs its own focus *effect*, but a
-/// `Menu` rendered with `.menuStyle(.button)` is hosted by an `NSControl` that draws
-/// its own `focusRingType` ring — which the SwiftUI modifier doesn't reach, so a
-/// stray blue box still appears around the chip when it takes keyboard focus (#341).
-/// Attached via `.background`, the helper sits inside the control's view tree and
-/// walks up to set `focusRingType = .none` on the hosting views (the same
-/// walk-up-the-view-tree trick an `NSViewRepresentable` uses to reach its host).
-private struct FocusRingSuppressor: NSViewRepresentable {
-    func makeNSView(context _: Context) -> NSView {
-        let view = NSView()
-        // The view isn't attached to the control's hierarchy yet at make time.
-        DispatchQueue.main.async { suppress(from: view) }
-        return view
-    }
+#if os(macOS)
+    /// Strips the AppKit keyboard focus ring from the control backing a button-styled
+    /// `Menu`. SwiftUI's `.focusEffectDisabled()` governs its own focus *effect*, but a
+    /// `Menu` rendered with `.menuStyle(.button)` is hosted by an `NSControl` that draws
+    /// its own `focusRingType` ring — which the SwiftUI modifier doesn't reach, so a
+    /// stray blue box still appears around the chip when it takes keyboard focus (#341).
+    /// Attached via `.background`, the helper sits inside the control's view tree and
+    /// walks up to set `focusRingType = .none` on the hosting views (the same
+    /// walk-up-the-view-tree trick an `NSViewRepresentable` uses to reach its host).
+    private struct FocusRingSuppressor: NSViewRepresentable {
+        func makeNSView(context _: Context) -> NSView {
+            let view = NSView()
+            // The view isn't attached to the control's hierarchy yet at make time.
+            DispatchQueue.main.async { suppress(from: view) }
+            return view
+        }
 
-    func updateNSView(_ nsView: NSView, context _: Context) {
-        // Re-assert in case SwiftUI rebuilt the backing control and reset its ring.
-        DispatchQueue.main.async { suppress(from: nsView) }
-    }
+        func updateNSView(_ nsView: NSView, context _: Context) {
+            // Re-assert in case SwiftUI rebuilt the backing control and reset its ring.
+            DispatchQueue.main.async { suppress(from: nsView) }
+        }
 
-    private func suppress(from view: NSView) {
-        var candidate = view.superview
-        while let current = candidate {
-            current.focusRingType = .none
-            if let control = current as? NSControl {
-                control.cell?.focusRingType = .none
+        private func suppress(from view: NSView) {
+            var candidate = view.superview
+            while let current = candidate {
+                current.focusRingType = .none
+                if let control = current as? NSControl {
+                    control.cell?.focusRingType = .none
+                }
+                candidate = current.superview
             }
-            candidate = current.superview
         }
     }
-}
+#endif
 
 extension View {
     /// Suppresses the AppKit focus ring drawn by the control hosting this view.
+    /// On iOS there is no AppKit focus ring to strip, so this returns the content
+    /// unchanged.
     func suppressFocusRing() -> some View {
-        background(FocusRingSuppressor())
+        #if os(macOS)
+            background(FocusRingSuppressor())
+        #else
+            self
+        #endif
     }
 }
 

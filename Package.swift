@@ -34,7 +34,7 @@ let buddySwiftSettings: [SwiftSetting] = [
 /// deliberately acyclic so a future MCP product can be added Foundation-only.
 let package = Package(
     name: "buddy-kit",
-    platforms: [.macOS(.v15)],
+    platforms: [.macOS(.v15), .iOS(.v18)],
     products: [
         .library(name: "BuddyDesignSystem", targets: ["BuddyDesignSystem"]),
         .library(name: "PaginatedRESTClient", targets: ["PaginatedRESTClient"]),

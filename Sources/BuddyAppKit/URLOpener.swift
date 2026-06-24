@@ -11,14 +11,24 @@
 //  any call site.
 //
 
-import AppKit
+#if os(macOS)
+    import AppKit
+#else
+    import UIKit
+#endif
 
 public enum URLOpener {
     /// Open `url` through the system. External links launch the user's default
     /// handler; the app's own URL scheme routes back through LaunchServices to
     /// deliver the deep link (and surface a window when none is open).
     public static func open(_ url: URL) {
-        NSWorkspace.shared.open(url)
+        #if os(macOS)
+            NSWorkspace.shared.open(url)
+        #else
+            // `UIApplication.shared.open` is MainActor-isolated and async; hop onto
+            // the main actor so the synchronous macOS signature stays unchanged.
+            Task { @MainActor in UIApplication.shared.open(url) }
+        #endif
     }
 }
 

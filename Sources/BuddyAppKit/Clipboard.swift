@@ -9,13 +9,21 @@
 //  without touching any call site.
 //
 
-import AppKit
+#if os(macOS)
+    import AppKit
+#else
+    import UIKit
+#endif
 
 public enum Clipboard {
     /// Replace the pasteboard contents with `text` as a plain string.
     public static func copy(_ text: String) {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
+        #if os(macOS)
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+        #else
+            UIPasteboard.general.string = text
+        #endif
     }
 
     /// Replace the pasteboard with `text` plus an optional rich-text (RTF)
@@ -24,8 +32,14 @@ public enum Clipboard {
     /// terminal. Keeps the `.rtf` pasteboard type behind the seam alongside the
     /// plain-text write.
     public static func copy(_ text: String, rtf: Data?) {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
-        if let rtf { NSPasteboard.general.setData(rtf, forType: .rtf) }
+        #if os(macOS)
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+            if let rtf { NSPasteboard.general.setData(rtf, forType: .rtf) }
+        #else
+            // UIPasteboard has no plain RTF type as a first-class slot; write the
+            // plain string (the macOS RTF fallback isn't available on iOS).
+            UIPasteboard.general.string = text
+        #endif
     }
 }

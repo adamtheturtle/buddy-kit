@@ -26,7 +26,7 @@ public extension View {
         fallback: some ShapeStyle,
         interactive: Bool = false
     ) -> some View {
-        if #available(macOS 26, *) {
+        if #available(macOS 26, iOS 26, *) {
             glassEffect(interactive ? .regular.interactive() : .regular, in: shape)
         } else {
             background(fallback, in: shape)
@@ -54,7 +54,7 @@ public extension View {
         fallbackStrokeWidth: CGFloat,
         in shape: some Shape = Capsule()
     ) -> some View {
-        if #available(macOS 26, *) {
+        if #available(macOS 26, iOS 26, *) {
             let glass: Glass = (glassTint.map { Glass.regular.tint($0) } ?? .regular).interactive()
             glassEffect(glass, in: shape)
         } else {
@@ -69,7 +69,7 @@ public extension View {
     /// floating set, rather than buttons already resting on a glass surface.
     @ViewBuilder
     func glassButtonStyle() -> some View {
-        if #available(macOS 26, *) {
+        if #available(macOS 26, iOS 26, *) {
             buttonStyle(.glass)
         } else {
             buttonStyle(.automatic)
@@ -81,7 +81,7 @@ public extension View {
     /// look on Sequoia while gaining glass on Tahoe.
     @ViewBuilder
     func prominentGlassButtonStyle() -> some View {
-        if #available(macOS 26, *) {
+        if #available(macOS 26, iOS 26, *) {
             buttonStyle(.glassProminent)
         } else {
             buttonStyle(.borderedProminent)
@@ -99,7 +99,7 @@ public extension View {
 public func chipLabelColor(isActive: Bool) -> Color {
     guard isActive else { return .primary }
 
-    if #available(macOS 26, *) {
+    if #available(macOS 26, iOS 26, *) {
         return .white
     }
     return .accentColor
@@ -118,7 +118,7 @@ public struct GlassCluster<Content: View>: View {
     }
 
     public var body: some View {
-        if #available(macOS 26, *) {
+        if #available(macOS 26, iOS 26, *) {
             GlassEffectContainer(spacing: spacing) { content }
         } else {
             content

@@ -5,11 +5,19 @@
 //  Colour, spacing, and contrast tokens shared across the design-system primitives.
 //
 
-import AppKit
+#if os(macOS)
+    import AppKit
+#else
+    import UIKit
+#endif
 import SwiftUI
 
 public extension Color {
-    static let cardBackground = Color(nsColor: .controlBackgroundColor)
+    #if os(macOS)
+        static let cardBackground = Color(nsColor: .controlBackgroundColor)
+    #else
+        static let cardBackground = Color(uiColor: .secondarySystemBackground)
+    #endif
     static let subtleStroke = Color.primary.opacity(0.08)
     /// The neutral capsule fill an *idle* filter chip wears on macOS 15 so every chip
     /// in the bar reads as a control rather than bare text + chevron (#352). On
@@ -33,12 +41,29 @@ public extension Color {
     /// This color as an "#RRGGBB" sRGB hex string, or `nil` if it can't be resolved
     /// to fixed components (e.g. a dynamic/catalog color).
     var hexString: String? {
-        guard let resolved = NSColor(self).usingColorSpace(.sRGB) else { return nil }
+        #if os(macOS)
+            guard let resolved = NSColor(self).usingColorSpace(.sRGB) else { return nil }
 
-        let red = Int((resolved.redComponent * 255).rounded())
-        let green = Int((resolved.greenComponent * 255).rounded())
-        let blue = Int((resolved.blueComponent * 255).rounded())
-        return String(format: "#%02X%02X%02X", red, green, blue)
+            let red = Int((resolved.redComponent * 255).rounded())
+            let green = Int((resolved.greenComponent * 255).rounded())
+            let blue = Int((resolved.blueComponent * 255).rounded())
+            return String(format: "#%02X%02X%02X", red, green, blue)
+        #else
+            // UIColor has no color-space conversion that can fail the same way; read
+            // the sRGB components directly, returning nil if they can't be resolved.
+            var red: CGFloat = 0
+            var green: CGFloat = 0
+            var blue: CGFloat = 0
+            var alpha: CGFloat = 0
+            guard UIColor(self).getRed(&red, green: &green, blue: &blue, alpha: &alpha) else { return nil }
+
+            return String(
+                format: "#%02X%02X%02X",
+                Int((red * 255).rounded()),
+                Int((green * 255).rounded()),
+                Int((blue * 255).rounded())
+            )
+        #endif
     }
 }
 
