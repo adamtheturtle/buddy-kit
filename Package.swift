@@ -20,8 +20,6 @@ let buddySwiftSettings: [SwiftSetting] = [
 ///   reusable cards/section-headers/stat-tiles/chips/avatars, the `FilterChipMenu`
 ///   family, and `FilterableListView`. (The NSTableView-backed list now lives in the
 ///   standalone FastList package: https://github.com/adamtheturtle/FastList.)
-/// - `PaginatedRESTClient` — a generic transport for paginated, bearer-authenticated
-///   REST APIs.
 /// - `BuddyAppKit` — zero-coupling app utilities (pasteboard, URL opening,
 ///   reachability, a relative-date cache, multi-selection rules, a serial write
 ///   queue, a lenient array decoder, and a generic Keychain account store).
@@ -30,14 +28,13 @@ let buddySwiftSettings: [SwiftSetting] = [
 /// Swift 6 language mode and MainActor default actor isolation, against which the
 /// files' `nonisolated` annotations are written. macOS 15+.
 ///
-/// The three products are independent (no inter-product dependencies); the DAG is
+/// The products are independent (no inter-product dependencies); the DAG is
 /// deliberately acyclic so a future MCP product can be added Foundation-only.
 let package = Package(
     name: "buddy-kit",
     platforms: [.macOS(.v15), .iOS(.v18)],
     products: [
         .library(name: "BuddyDesignSystem", targets: ["BuddyDesignSystem"]),
-        .library(name: "PaginatedRESTClient", targets: ["PaginatedRESTClient"]),
         .library(name: "BuddyAppKit", targets: ["BuddyAppKit"])
     ],
     dependencies: [
@@ -60,15 +57,6 @@ let package = Package(
         .testTarget(
             name: "BuddyDesignSystemTests",
             dependencies: ["BuddyDesignSystem"],
-            swiftSettings: buddySwiftSettings
-        ),
-        .target(
-            name: "PaginatedRESTClient",
-            swiftSettings: buddySwiftSettings
-        ),
-        .testTarget(
-            name: "PaginatedRESTClientTests",
-            dependencies: ["PaginatedRESTClient"],
             swiftSettings: buddySwiftSettings
         ),
         .target(
