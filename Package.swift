@@ -26,14 +26,17 @@ let mcpSwiftSettings: [SwiftSetting] = [
 ///
 /// - `BuddyDesignSystem` — generic SwiftUI primitives: colour/spacing tokens, the
 ///   reusable cards/section-headers/stat-tiles/chips/avatars, the `FilterChipMenu`
-///   family, and `FilterableListView`. (The NSTableView-backed list now lives in the
-///   standalone FastList package: https://github.com/adamtheturtle/FastList.)
+///   family, `FilterableListView`, the `PopoverSelectionRow` picker row, and the
+///   `CredentialValidationState` + `ValidationStatusBanner` account-validation pair.
+///   (The NSTableView-backed list now lives in the standalone FastList package:
+///   https://github.com/adamtheturtle/FastList.)
 /// - `BuddyAppKit` — zero-coupling app utilities (pasteboard, URL opening,
 ///   reachability, a relative-date cache, multi-selection rules, a serial write
 ///   queue, a lenient array decoder, a generic Keychain account store, the
 ///   `DateWindow`/`NamedDateRange` list-filter primitives plus the `ListFilterCriteria`
-///   seam, a `RevisionMemo` recompute-on-signature-change cache, and the iCloud
-///   `CloudSyncMerge` strategies + `CloudSyncStore` key-value mirror).
+///   seam, a `RevisionMemo` recompute-on-signature-change cache, the iCloud
+///   `CloudSyncMerge` strategies + `CloudSyncStore` key-value mirror, and the
+///   `AccountScoped` merged-row type + `MergedLoader` per-account fan-out).
 ///
 /// Settings mirror the consuming app targets so the sources compile identically:
 /// Swift 6 language mode and MainActor default actor isolation, against which the

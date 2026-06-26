@@ -59,6 +59,21 @@ struct RenderTests {
         expectRenders(Card { Text("Body") }, "Card wrapping content")
     }
 
+    @Test func `popover selection row renders`() {
+        expectRenders(PopoverSelectionRow(label: "Python", isSelected: true) {}, "selected, no subtitle")
+        expectRenders(PopoverSelectionRow(label: "Jane", subtitle: "jane@acme.com", isSelected: false) {},
+                      "unselected, with subtitle")
+    }
+
+    @Test func `validation status banner renders each non-empty state`() {
+        // .idle and .valid-without-success are EmptyView, which renders to a zero-size
+        // raster, so only the visible states are asserted to produce a non-empty image.
+        expectRenders(ValidationStatusBanner(.validating, validating: "Validating…"), "validating")
+        expectRenders(ValidationStatusBanner(.valid, validating: "Validating…", success: "Key works."),
+                      "valid with success text")
+        expectRenders(ValidationStatusBanner(.invalid("Bad key"), validating: "Validating…"), "invalid")
+    }
+
     @Test func `detail section renders`() {
         expectRenders(
             DetailSection(title: "Details", systemImage: "info.circle") {
