@@ -22,7 +22,10 @@ let buddySwiftSettings: [SwiftSetting] = [
 ///   standalone FastList package: https://github.com/adamtheturtle/FastList.)
 /// - `BuddyAppKit` — zero-coupling app utilities (pasteboard, URL opening,
 ///   reachability, a relative-date cache, multi-selection rules, a serial write
-///   queue, a lenient array decoder, and a generic Keychain account store).
+///   queue, a lenient array decoder, a generic Keychain account store, the
+///   `DateWindow`/`NamedDateRange` list-filter primitives plus the `ListFilterCriteria`
+///   seam, a `RevisionMemo` recompute-on-signature-change cache, and the iCloud
+///   `CloudSyncMerge` strategies + `CloudSyncStore` key-value mirror).
 ///
 /// Settings mirror the consuming app targets so the sources compile identically:
 /// Swift 6 language mode and MainActor default actor isolation, against which the

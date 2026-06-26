@@ -11,7 +11,7 @@ consume it unchanged.
 | --- | --- |
 | `BuddyDesignSystem` | Generic SwiftUI primitives: colour/spacing tokens, reusable cards / section headers / stat tiles / chips / avatars, the `FilterChipMenu` family, `FilterableListView`, and the NSTableView-backed `ListTable`. |
 | `PaginatedRESTClient` | A generic transport for paginated, bearer-authenticated REST APIs. |
-| `BuddyAppKit` | Zero-coupling app utilities: pasteboard, URL opening, reachability, a relative-date cache, multi-selection rules, a serial write queue, a lenient array decoder, and a generic Keychain account store. |
+| `BuddyAppKit` | Zero-coupling app utilities: pasteboard, URL opening, reachability, a relative-date cache, multi-selection rules, a serial write queue, a lenient array decoder, a generic Keychain account store, the `DateWindow`/`NamedDateRange` list-filter primitives with the `ListFilterCriteria` seam, a `RevisionMemo` recompute-on-signature-change cache, and the iCloud `CloudSyncMerge` strategies + `CloudSyncStore` key-value mirror. |
 
 The three products are independent — there are no inter-product dependencies, and the
 dependency graph is deliberately acyclic so a future Foundation-only MCP product can be
