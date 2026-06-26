@@ -26,8 +26,10 @@ let mcpSwiftSettings: [SwiftSetting] = [
 ///
 /// - `BuddyDesignSystem` — generic SwiftUI primitives: colour/spacing tokens, the
 ///   reusable cards/section-headers/stat-tiles/chips/avatars, the `FilterChipMenu`
-///   family, `FilterableListView`, the `PopoverSelectionRow` picker row, and the
-///   `CredentialValidationState` + `ValidationStatusBanner` account-validation pair.
+///   family, `FilterableListView`, the `PopoverSelectionRow` picker row, the
+///   `CredentialValidationState` + `ValidationStatusBanner` account-validation pair, the
+///   cross-platform `Platform*` bridge, the `printDocument` print/Save-as-PDF core with
+///   its `PrintSection`/`PrintCode` primitives, and the `macPullToRefresh` bridge.
 ///   (The NSTableView-backed list now lives in the standalone FastList package:
 ///   https://github.com/adamtheturtle/FastList.)
 /// - `BuddyAppKit` — zero-coupling app utilities (pasteboard, URL opening,
@@ -35,8 +37,9 @@ let mcpSwiftSettings: [SwiftSetting] = [
 ///   queue, a lenient array decoder, a generic Keychain account store, the
 ///   `DateWindow`/`NamedDateRange` list-filter primitives plus the `ListFilterCriteria`
 ///   seam, a `RevisionMemo` recompute-on-signature-change cache, the iCloud
-///   `CloudSyncMerge` strategies + `CloudSyncStore` key-value mirror, and the
-///   `AccountScoped` merged-row type + `MergedLoader` per-account fan-out).
+///   `CloudSyncMerge` strategies + `CloudSyncStore` key-value mirror, the
+///   `AccountScoped` merged-row type + `MergedLoader` per-account fan-out, and the
+///   `RefreshSchedule`/`periodicReload` wall-clock refresh loop).
 ///
 /// Settings mirror the consuming app targets so the sources compile identically:
 /// Swift 6 language mode and MainActor default actor isolation, against which the
