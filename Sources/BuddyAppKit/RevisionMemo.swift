@@ -20,6 +20,11 @@ public final class RevisionMemo<Value, Signature: Equatable> {
     private var signature: Signature?
     private var storage: Value
 
+    // Workaround: Xcode 26.5's optimizer crashes on this generic class's
+    // synthesized deinit; opt this type's deinit out of optimization.
+    @_optimize(none)
+    deinit {}
+
     /// Seeds the cache with the value to return before the first `value(for:compute:)`
     /// call (typically an empty collection).
     public init(_ initial: Value) {
