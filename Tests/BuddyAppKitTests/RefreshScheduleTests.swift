@@ -45,4 +45,31 @@ struct RefreshScheduleTests {
         let fire = RefreshSchedule.nextFire(after: now, interval: .zero, now: now)
         #expect(fire > now)
     }
+
+    /// MainActor-isolated counter so the closures below mutate shared reference state
+    /// instead of a captured `var` (which an escaping `@Sendable` task closure can't).
+    @MainActor private final class RunCounter { var value = 0 }
+
+    /// Cross-module isolation contract (the reason for the `isolation` parameter): a
+    /// `@MainActor` caller must be able to hand `periodicReload` closures that read and
+    /// mutate MainActor state without a region-isolation / `Sendable` error. This is
+    /// primarily a *compile-time* guard — if the signature ever regresses to `nonisolated`
+    /// closures, this test stops building. The Xcode Cloud build failed exactly here,
+    /// seeing `periodicReload` as nonisolated across the module boundary.
+    @MainActor
+    @Test
+    func `runs caller-isolated closures reading MainActor state`() async {
+        let counter = RunCounter()
+        let task = Task { @MainActor in
+            await periodicReload(interval: { .milliseconds(10) }, work: {
+                counter.value += 1
+            })
+        }
+        // The first `work` runs immediately, before any sleep; give it time, then stop
+        // the loop and wait for it to unwind so the count is settled.
+        try? await Task.sleep(for: .milliseconds(50))
+        task.cancel()
+        _ = await task.value
+        #expect(counter.value >= 1)
+    }
 }

@@ -39,8 +39,10 @@ public nonisolated enum RefreshSchedule {
 
 /// Runs `work` immediately, then re-runs it on `interval` until the task is cancelled.
 /// Cancellation breaks the loop cleanly instead of being swallowed by `try?`.
-public func periodicReload(interval: Duration, work: () async -> Void) async {
-    await periodicReload(interval: { interval }, work: work)
+public func periodicReload(interval: Duration,
+                           isolation: isolated (any Actor)? = #isolation,
+                           work: () async -> Void) async {
+    await periodicReload(interval: { interval }, isolation: isolation, work: work)
 }
 
 /// Variant whose interval is recomputed after each run, letting callers stretch the
@@ -50,7 +52,18 @@ public func periodicReload(interval: Duration, work: () async -> Void) async {
 /// Refreshes fire on a fixed wall-clock grid anchored at the first run, so the time a
 /// refresh takes doesn't push the next one out (no cumulative drift), and a long gap
 /// realigns to the next boundary rather than triggering a burst (see ``RefreshSchedule``).
-public func periodicReload(interval: () -> Duration, work: () async -> Void) async {
+///
+/// The function runs on the caller's actor: the `isolation` parameter defaults to
+/// `#isolation`, so a `@MainActor` caller's `interval`/`work` closures (which read view
+/// state) execute on the MainActor without crossing an isolation boundary — no `Sendable`
+/// requirement, no region-isolation error. Carrying the isolation explicitly in the
+/// signature (rather than relying on the package's MainActor `defaultIsolation`) is what
+/// makes this hold across the module boundary on every toolchain: some toolchains drop the
+/// `defaultIsolation(MainActor)` annotation from the emitted `.swiftinterface`, so a
+/// consumer would otherwise see this as `nonisolated` and reject the MainActor closures.
+public func periodicReload(interval: () -> Duration,
+                           isolation: isolated (any Actor)? = #isolation,
+                           work: () async -> Void) async {
     let clock = ContinuousClock()
     await work()
     var last = clock.now
