@@ -161,6 +161,11 @@ public struct StatTile: View {
                         .tracking(0.6)
                         .foregroundStyle(.secondary)
                         .textCase(.uppercase)
+                        // Keep the title on one line and scale it down in a tight
+                        // tile rather than letting it wrap and hyphenate mid-word
+                        // (e.g. "PAD-S-USE-D" on a narrow iPad portrait pane).
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 }
                 Text(value)
                     .font(.title2.weight(.semibold))
