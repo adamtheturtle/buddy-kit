@@ -55,6 +55,19 @@ struct RenderTests {
         expectRenders(MetaLabel(text: "Python"), "MetaLabel without icon")
     }
 
+    @Test func `markdown text renders selectable and print variants`() {
+        let raw = "# Heading\n\nBody with **bold**, `code`, and a [link](https://example.com).\n\n- one\n- two"
+        // The default (selectable) path.
+        expectRenders(MarkdownText(raw), "MarkdownText selectable")
+        // The print-rasterization path drops the selection overlay (coderpad #582) so
+        // ImageRenderer doesn't hit the un-flattenable AppKitTextInteractionOverlay; it
+        // must still produce a non-empty raster.
+        expectRenders(MarkdownText(raw).environment(\.isRasterizedForPrint, true),
+                      "MarkdownText rasterized for print")
+        // The empty-string fallback path.
+        expectRenders(MarkdownText(""), "MarkdownText empty fallback")
+    }
+
     @Test func `card renders`() {
         expectRenders(Card { Text("Body") }, "Card wrapping content")
     }

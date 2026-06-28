@@ -9,6 +9,16 @@
 import SwiftUI
 import Textual
 
+extension EnvironmentValues {
+    /// When `true`, selectable design-system text renders without its text-selection
+    /// overlay. Set this on a view tree that gets rasterized (print / PDF export via
+    /// `ImageRenderer`): the private `AppKitTextInteractionOverlay` that backs
+    /// `.textSelection(.enabled)` cannot be flattened into a bitmap, so leaving it on
+    /// spams a SwiftUICore "Unable to render flattened version" fault per block, and
+    /// text selection is meaningless in a static rasterized page anyway. (coderpad #582)
+    @Entry public var isRasterizedForPrint: Bool = false
+}
+
 /// Renders GitHub-flavored Markdown via Textual, themed to match the app's
 /// typography. Call sites are unchanged: `MarkdownText(raw)`.
 ///
@@ -18,6 +28,7 @@ import Textual
 /// so we lean on the defaults rather than carrying a hand-rolled theme.
 public struct MarkdownText: View {
     let raw: String
+    @Environment(\.isRasterizedForPrint) private var isRasterizedForPrint
 
     public init(_ raw: String) {
         self.raw = raw
@@ -26,11 +37,20 @@ public struct MarkdownText: View {
     public var body: some View {
         if raw.isEmpty {
             Text("(empty)").foregroundStyle(.secondary)
+        } else if isRasterizedForPrint {
+            // Skip the selection overlay when rasterizing for print (#582); it can't be
+            // flattened into a bitmap and has no meaning on a static page. `.disabled` and
+            // `.enabled` are distinct TextSelectability types, so this branches rather
+            // than passing a value.
+            structured.textual.textSelection(.disabled)
         } else {
-            StructuredText(markdown: raw)
-                .textual.textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            structured.textual.textSelection(.enabled)
         }
+    }
+
+    private var structured: some View {
+        StructuredText(markdown: raw)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
