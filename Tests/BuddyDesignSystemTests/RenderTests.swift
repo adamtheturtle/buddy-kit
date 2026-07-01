@@ -124,4 +124,87 @@ struct RenderTests {
             .frame(width: 200),
             "StatTile")
     }
+
+    @Test func `saved search chip renders each state`() {
+        expectRenders(
+            SavedSearchChip(name: "My Pads", isActive: false, onApply: {}, onDelete: {}),
+            "SavedSearchChip idle, deletable"
+        )
+        expectRenders(
+            SavedSearchChip(name: "Active", systemImage: "bolt.fill", isActive: true, onApply: {}),
+            "SavedSearchChip active default (no delete)"
+        )
+        // A name past the clamp must still render (and truncate).
+        expectRenders(
+            SavedSearchChip(name: String(repeating: "x", count: 80), onApply: {}, onDelete: {}),
+            "SavedSearchChip clamped long name"
+        )
+    }
+
+    @Test func `smart filter sheet renders each state`() {
+        expectRenders(
+            SmartFilterSheet(
+                text: .constant(""),
+                isInterpreting: false,
+                failed: false,
+                placeholder: "e.g. python pads from last week",
+                failedMessage: "Couldn't turn that into filters.",
+                hintMessage: "Mention a language, owner, state, or date.",
+                onSubmit: {}, onCancel: {}
+            ),
+            "SmartFilterSheet idle"
+        )
+        expectRenders(
+            SmartFilterSheet(
+                text: .constant("something"),
+                isInterpreting: true,
+                failed: false,
+                placeholder: "e.g. python pads",
+                failedMessage: "Couldn't turn that into filters.",
+                hintMessage: "Mention a language, owner, state, or date.",
+                onSubmit: {}, onCancel: {}
+            ),
+            "SmartFilterSheet interpreting"
+        )
+        expectRenders(
+            SmartFilterSheet(
+                text: .constant("unmatchable"),
+                isInterpreting: false,
+                failed: true,
+                placeholder: "e.g. python pads",
+                failedMessage: "Couldn't turn that into filters.",
+                hintMessage: "Mention a language, owner, state, or date.",
+                onSubmit: {}, onCancel: {}
+            ),
+            "SmartFilterSheet failed"
+        )
+    }
+
+    @Test func `appearance picker renders each selection`() {
+        expectRenders(AppearancePicker(selection: .constant(nil)), "AppearancePicker system")
+        expectRenders(AppearancePicker(selection: .constant(.light)), "AppearancePicker light")
+        expectRenders(AppearancePicker(selection: .constant(.dark)), "AppearancePicker dark")
+    }
+
+    @Test func `inline editable title renders each mode`() {
+        expectRenders(
+            InlineEditableTitle(title: "Backend Screen", isEditable: true) { _ in true }.frame(width: 320),
+            "InlineEditableTitle editable"
+        )
+        expectRenders(
+            InlineEditableTitle(title: "Backend Screen", isEditable: false) { _ in true }.frame(width: 320),
+            "InlineEditableTitle read-only"
+        )
+        // The width-clamping variant (coderpad split-view header) must also render.
+        expectRenders(
+            InlineEditableTitle(
+                title: "An Extremely Long Pad Title That Would Otherwise Re-Jig The Window",
+                placeholder: "Untitled Pad",
+                isEditable: true,
+                clampsWidth: true,
+                font: .title.bold()
+            ) { _ in true }.frame(width: 320),
+            "InlineEditableTitle clamped"
+        )
+    }
 }

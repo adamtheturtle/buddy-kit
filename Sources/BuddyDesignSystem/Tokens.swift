@@ -67,6 +67,24 @@ public extension Color {
     }
 }
 
+/// Shared corner radii so cards, chips, and controls curve consistently instead of
+/// each view reaching for its own magic number. Named by the role a shape plays
+/// rather than its value; tweak here to restyle a whole tier at once (#629). Lifted
+/// from the app so shared controls (the saved-search chip) can reference the same
+/// scale instead of hard-coding a radius.
+public enum Radius {
+    /// Tightly nested inner fills (e.g. an appearance swatch inside a selected card).
+    public static let tight: CGFloat = 4
+    /// Compact controls: chips, tokens, and small pills.
+    public static let chip: CGFloat = 6
+    /// Standard controls, selectable rows, and small cards.
+    public static let control: CGFloat = 8
+    /// Content cards and media/code thumbnails.
+    public static let card: CGFloat = 10
+    /// Prominent hero and empty-state cards.
+    public static let prominent: CGFloat = 16
+}
+
 /// Shared layout constants so pane chrome stays in sync across detail views.
 /// Tweak these here instead of hunting for matching literals in every view.
 public enum Spacing {
