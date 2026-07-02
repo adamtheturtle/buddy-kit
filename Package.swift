@@ -12,14 +12,6 @@ let buddySwiftSettings: [SwiftSetting] = [
     .enableUpcomingFeature("InferIsolatedConformances")
 ]
 
-/// `BuddyMCP` deliberately does NOT take MainActor default isolation: the MCP server is
-/// actor-based and its method handlers are nonisolated `@Sendable` closures, so the code
-/// is written against the default (nonisolated) isolation the official SDK expects -
-/// mirroring the standalone `coderpad-mcp` package, which isolates nothing.
-let mcpSwiftSettings: [SwiftSetting] = [
-    .swiftLanguageMode(.v6)
-]
-
 /// buddy-kit: the service-agnostic shared foundation for the "buddy" family of
 /// macOS apps (PadBuddy for CoderPad, RankBuddy for HackerRank). Each product is
 /// domain-free so a sibling app can consume it unchanged:
@@ -45,22 +37,17 @@ let mcpSwiftSettings: [SwiftSetting] = [
 /// Swift 6 language mode and MainActor default actor isolation, against which the
 /// files' `nonisolated` annotations are written. macOS 15+.
 ///
-/// - `BuddyMCP` — a service-agnostic seam over the official MCP Swift SDK: an
-///   `MCPToolProvider` protocol a host app implements with its own tool catalog and
-///   dispatch, plus a `BuddyMCPServer` bootstrap that wires the provider to the SDK and
-///   runs it over a transport, with generic argument-coercion / descriptor-to-`Tool` /
-///   result-builder scaffolding. The concrete catalog, transforms, prompts, resources
-///   and account model stay app-side.
+/// The MCP server scaffolding that lived here (`BuddyMCP`) now ships as the standalone
+/// MCPKit package: https://github.com/adamtheturtle/MCPKit
 ///
 /// The library products are independent (no inter-product dependencies); the DAG is
-/// deliberately acyclic. `BuddyMCP` depends only on Foundation + the MCP SDK.
+/// deliberately acyclic.
 let package = Package(
     name: "buddy-kit",
     platforms: [.macOS(.v15), .iOS(.v18)],
     products: [
         .library(name: "BuddyDesignSystem", targets: ["BuddyDesignSystem"]),
-        .library(name: "BuddyAppKit", targets: ["BuddyAppKit"]),
-        .library(name: "BuddyMCP", targets: ["BuddyMCP"])
+        .library(name: "BuddyAppKit", targets: ["BuddyAppKit"])
     ],
     dependencies: [
         // Backs the reusable `FlowLayout` wrapper. Pinned to the same major the apps
@@ -68,10 +55,7 @@ let package = Package(
         .package(url: "https://github.com/tevelee/SwiftUI-Flow", from: "3.4.0"),
         // Backs the reusable `MarkdownText` view. Pinned to the exact version the apps
         // use so everything resolves to one Textual revision.
-        .package(url: "https://github.com/adamtheturtle/textual", exact: "0.5.1"),
-        // The official Model Context Protocol Swift SDK, backing `BuddyMCP`. Pinned to
-        // the same major the apps' MCP servers use so everything resolves to one version.
-        .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", from: "0.12.1")
+        .package(url: "https://github.com/adamtheturtle/textual", exact: "0.5.1")
     ],
     targets: [
         .target(
@@ -95,18 +79,6 @@ let package = Package(
             name: "BuddyAppKitTests",
             dependencies: ["BuddyAppKit"],
             swiftSettings: buddySwiftSettings
-        ),
-        .target(
-            name: "BuddyMCP",
-            dependencies: [
-                .product(name: "MCP", package: "swift-sdk")
-            ],
-            swiftSettings: mcpSwiftSettings
-        ),
-        .testTarget(
-            name: "BuddyMCPTests",
-            dependencies: ["BuddyMCP"],
-            swiftSettings: mcpSwiftSettings
         )
     ]
 )
