@@ -126,7 +126,7 @@ struct ListFilterCriteriaTests {
     private struct Criteria: ListFilterCriteria {
         let search: String
         let created: DateWindow
-        func matches(_ item: Row, now: Date) -> Bool {
+        nonisolated func matches(_ item: Row, now: Date) -> Bool {
             (search.isEmpty || item.name.localizedCaseInsensitiveContains(search))
                 && created.contains(item.createdAt, now: now)
         }
