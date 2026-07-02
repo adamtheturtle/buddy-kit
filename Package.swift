@@ -30,9 +30,8 @@ let buddySwiftSettings: [SwiftSetting] = [
 ///   queue, a lenient array decoder, a generic Keychain account store, the
 ///   `DateWindow`/`NamedDateRange` list-filter primitives plus the `ListFilterCriteria`
 ///   seam, a `RevisionMemo` recompute-on-signature-change cache, the iCloud
-///   `CloudSyncMerge` strategies + `CloudSyncStore` key-value mirror, the
-///   `AccountScoped` merged-row type + `MergedLoader` per-account fan-out, and the
-///   `RefreshSchedule`/`periodicReload` wall-clock refresh loop).
+///   `CloudSyncMerge` strategies + `CloudSyncStore` key-value mirror, and the
+///   `AccountScoped` merged-row type + `MergedLoader` per-account fan-out).
 ///
 /// Settings mirror the consuming app targets so the sources compile identically:
 /// Swift 6 language mode and MainActor default actor isolation, against which the

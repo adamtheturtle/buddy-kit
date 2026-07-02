@@ -114,37 +114,3 @@ struct AccountHealthMonitorTests {
         #expect(monitor.lastChecked != nil) // ran once immediately
     }
 }
-
-@MainActor
-@Suite("Repeating task")
-struct RepeatingTaskTests {
-    @MainActor private final class Counter { var value = 0 }
-
-    @Test
-    func `runs immediately then is idempotent and cancellable`() async {
-        let counter = Counter()
-        let loop = RepeatingTask(runImmediately: true, interval: .milliseconds(10)) {
-            counter.value += 1
-        }
-        loop.start()
-        #expect(loop.isRunning)
-        loop.start() // no-op
-        try? await Task.sleep(for: .milliseconds(50))
-        loop.stop()
-        #expect(!loop.isRunning)
-        #expect(counter.value >= 1) // the immediate run happened
-    }
-
-    @Test
-    func `runImmediately false defers the first run past the initial interval`() async {
-        let counter = Counter()
-        let loop = RepeatingTask(runImmediately: false, interval: .seconds(60)) {
-            counter.value += 1
-        }
-        loop.start()
-        // Well within the 60s interval: with no immediate run, nothing has fired yet.
-        try? await Task.sleep(for: .milliseconds(50))
-        loop.stop()
-        #expect(counter.value == 0)
-    }
-}

@@ -13,10 +13,10 @@
 
 import Foundation
 
-/// A generic `@Observable` health monitor for one account at a time. Built on
-/// ``RepeatingTask``; the app supplies the account id to probe, an async `probe`, and an
-/// `isUnauthorized` classifier, and this owns the timer, the success/unauthorized/transient
-/// bucketing, and the observable verdict set the banner reads.
+/// A generic `@Observable` health monitor for one account at a time. The app supplies
+/// the account id to probe, an async `probe`, and an `isUnauthorized` classifier, and
+/// this owns the timer, the success/unauthorized/transient bucketing, and the observable
+/// verdict set the banner reads.
 ///
 /// `AccountID` is generic (both apps key on `UUID`, but nothing here requires it) so the
 /// monitor never reaches into an app account type. `@MainActor` (package default) because
@@ -40,7 +40,7 @@ public final class AccountHealthMonitor<AccountID: Hashable & Sendable> {
     @ObservationIgnored private let probe: (AccountID) async throws -> Void
     /// Whether a thrown error means the token was rejected (as opposed to a transient blip).
     @ObservationIgnored private let isUnauthorized: (any Error) -> Bool
-    @ObservationIgnored private var loop: RepeatingTask?
+    @ObservationIgnored private var loop: Task<Void, Never>?
 
     /// - Parameters:
     ///   - accountToCheck: The account id to probe this tick, or nil to skip.
@@ -62,16 +62,22 @@ public final class AccountHealthMonitor<AccountID: Hashable & Sendable> {
     public func start(every interval: Duration = .seconds(1800)) {
         guard loop == nil else { return }
 
-        let loop = RepeatingTask(runImmediately: true, interval: interval) { [weak self] in
-            await self?.check()
+        let cadence = interval > .zero ? interval : .seconds(1)
+        loop = Task { [weak self] in
+            while !Task.isCancelled {
+                await self?.check()
+                do {
+                    try await Task.sleep(for: cadence)
+                } catch {
+                    break
+                }
+            }
         }
-        self.loop = loop
-        loop.start()
     }
 
     /// Stops the check loop. Kept for start/stop symmetry.
     public func stop() {
-        loop?.stop()
+        loop?.cancel()
         loop = nil
     }
 
