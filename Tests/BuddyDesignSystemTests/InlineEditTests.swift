@@ -28,4 +28,10 @@ struct InlineEditTests {
         #expect(InlineEdit.commitValue(original: "Name", edited: "") == nil)
         #expect(InlineEdit.commitValue(original: "Name", edited: "   ") == nil)
     }
+
+    // A `nonisolated` test proves `commitValue` is callable from a non-`@MainActor`
+    // context (#5); it would not compile if the function were MainActor-isolated.
+    @Test nonisolated func `commitValue is callable from a nonisolated context`() {
+        #expect(InlineEdit.commitValue(original: "Old", edited: "New") == "New")
+    }
 }

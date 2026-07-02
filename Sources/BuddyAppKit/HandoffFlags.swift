@@ -19,7 +19,11 @@ public extension NSUserActivity {
     ///
     /// `isEligibleForPrediction` is an iOS-only eligibility flag, so it is set only under
     /// `#if !os(macOS)`.
-    func applyBuddyHandoffFlags(webpageURL: URL? = nil) {
+    ///
+    /// `nonisolated` because the `NSUserActivity` eligibility flags aren't actor-isolated,
+    /// so a `nonisolated` `userActivity` update path (e.g. a `nonisolated static configure`)
+    /// can adopt the shared helper instead of inlining the flag lines.
+    nonisolated func applyBuddyHandoffFlags(webpageURL: URL? = nil) {
         isEligibleForHandoff = true
         isEligibleForSearch = true
         if let webpageURL { self.webpageURL = webpageURL }

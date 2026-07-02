@@ -19,8 +19,9 @@
 import SwiftUI
 
 /// The pure commit decision for an inline edit, factored out so it can be unit-tested
-/// without a running view.
-public enum InlineEdit {
+/// without a running view. `nonisolated` (it's a pure function) so a plain, non-`@MainActor`
+/// test or caller can use it without hopping to the main actor.
+public nonisolated enum InlineEdit {
     /// The value to write when committing an edit, or `nil` when nothing should be
     /// written — the text is unchanged (ignoring surrounding whitespace) or empty.
     /// Returns the trimmed value so a rename never writes leading/trailing spaces.
