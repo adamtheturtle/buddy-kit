@@ -2,37 +2,21 @@
 //  Glass.swift
 //  BuddyDesignSystem
 //
-//  Generic Liquid Glass primitives extracted from the app (#377): the macOS-26
-//  glass treatments (with macOS-15 fallbacks) for the control/overlay layer, plus
-//  the chip capsule and label-colour helpers. Domain-free, so the HackerRank app
-//  can reuse them. App-coupled views (e.g. the "Get an API key" link) stay app-side.
+//  Generic Liquid Glass primitives extracted from the app (#377): the chip capsule
+//  and label-colour helpers, which give the filter / saved-search chips interactive
+//  Liquid Glass on macOS 26 with an opaque-material fallback on macOS 15. Domain-free,
+//  so the HackerRank app can reuse them.
+//
+//  The floating-glass, glass button-style, and GlassCluster compatibility wrappers were
+//  removed in #7 once every client moved to the OS 26 native APIs (glassEffect,
+//  .buttonStyle(.glass) / .buttonStyle(.glassProminent), GlassEffectContainer). Only the
+//  chip helpers remain, because buddy-kit still targets macOS 15 and its own chips
+//  (FilterChipMenu, SavedSearchChip) still need the pre-26 fallback.
 //
 
 import SwiftUI
 
 public extension View {
-    /// Backs the view with Liquid Glass in `shape` on macOS 26, falling back to
-    /// `fallback` painted in the same shape on macOS 15. Reserved for the
-    /// control/overlay layer that floats *above* content — inline search fields,
-    /// embedded-browser toolbars, floating panels. Per Apple's guidance, dense
-    /// content surfaces (cards, list rows, badges, chips) keep an opaque material
-    /// instead, so glass never stacks on glass or sits behind body text.
-    ///
-    /// Pass `interactive: true` for glass that backs a control the user presses,
-    /// so it gains the same responsive ripple the system gives `.buttonStyle(.glass)`.
-    @ViewBuilder
-    func floatingGlass(
-        in shape: some Shape,
-        fallback: some ShapeStyle,
-        interactive: Bool = false
-    ) -> some View {
-        if #available(macOS 26, iOS 26, *) {
-            glassEffect(interactive ? .regular.interactive() : .regular, in: shape)
-        } else {
-            background(fallback, in: shape)
-        }
-    }
-
     /// Backs a filter chip with a capsule that reads as a distinct control. On
     /// macOS 26 the idle chip gets interactive Liquid Glass (and an accent-tinted
     /// glass when its filter is set), so a row of chips floats above the list as a
@@ -62,31 +46,6 @@ public extension View {
                 .overlay(shape.stroke(fallbackStroke, lineWidth: fallbackStrokeWidth))
         }
     }
-
-    /// Applies the Liquid Glass button style to every button in this subtree on
-    /// macOS 26, leaving the macOS 15 appearance untouched (`.automatic`). Intended
-    /// for a row of icon controls grouped in a ``GlassCluster`` so they read as one
-    /// floating set, rather than buttons already resting on a glass surface.
-    @ViewBuilder
-    func glassButtonStyle() -> some View {
-        if #available(macOS 26, iOS 26, *) {
-            buttonStyle(.glass)
-        } else {
-            buttonStyle(.automatic)
-        }
-    }
-
-    /// Prominent call-to-action style: prominent Liquid Glass on macOS 26,
-    /// `.borderedProminent` on macOS 15 — so existing prominent buttons keep their
-    /// look on Sequoia while gaining glass on Tahoe.
-    @ViewBuilder
-    func prominentGlassButtonStyle() -> some View {
-        if #available(macOS 26, iOS 26, *) {
-            buttonStyle(.glassProminent)
-        } else {
-            buttonStyle(.borderedProminent)
-        }
-    }
 }
 
 /// The readable label colour for a filter chip given whether its filter is set.
@@ -103,25 +62,4 @@ public func chipLabelColor(isActive: Bool) -> Color {
         return .white
     }
     return .accentColor
-}
-
-/// Groups several `glassEffect`/glass-styled controls so the system can blend and
-/// morph them as a single Liquid Glass shape on macOS 26. On macOS 15 it's a plain
-/// passthrough, so the same call site compiles and lays out identically there.
-public struct GlassCluster<Content: View>: View {
-    var spacing: CGFloat
-    @ViewBuilder var content: Content
-
-    public init(spacing: CGFloat = 8, @ViewBuilder content: () -> Content) {
-        self.spacing = spacing
-        self.content = content()
-    }
-
-    public var body: some View {
-        if #available(macOS 26, iOS 26, *) {
-            GlassEffectContainer(spacing: spacing) { content }
-        } else {
-            content
-        }
-    }
 }
