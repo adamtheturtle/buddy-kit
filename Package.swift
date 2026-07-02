@@ -20,11 +20,11 @@ let buddySwiftSettings: [SwiftSetting] = [
 ///   reusable cards/section-headers/stat-tiles/chips/avatars, the `FilterChipMenu`
 ///   family, `FilterableListView`, the `PopoverSelectionRow` picker row, the
 ///   `CredentialValidationState` + `ValidationStatusBanner` account-validation pair, the
-///   cross-platform `Platform*` bridge, and the `printDocument` print/Save-as-PDF core
-///   with its `PrintSection`/`PrintCode` primitives.
+///   cross-platform `Platform*` bridge.
 ///   (The NSTableView-backed list now lives in the standalone FastList package:
-///   https://github.com/adamtheturtle/FastList, and the macOS pull-to-refresh bridge in
-///   https://github.com/adamtheturtle/MacPullToRefresh.)
+///   https://github.com/adamtheturtle/FastList, the macOS pull-to-refresh bridge in
+///   https://github.com/adamtheturtle/MacPullToRefresh, and the SwiftUI print/Save-as-PDF
+///   core in https://github.com/adamtheturtle/PrintableView.)
 /// - `BuddyAppKit` — zero-coupling app utilities (pasteboard, URL opening,
 ///   reachability, a relative-date cache, multi-selection rules, a serial write
 ///   queue, a lenient array decoder, a generic Keychain account store, the
