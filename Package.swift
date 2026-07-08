@@ -20,7 +20,7 @@ let buddySwiftSettings: [SwiftSetting] = [
 ///   reusable cards/section-headers/stat-tiles/chips/avatars, the `FilterChipMenu`
 ///   family, `FilterableListView`, the `PopoverSelectionRow` picker row, the
 ///   `CredentialValidationState` + `ValidationStatusBanner` account-validation pair, the
-///   cross-platform `Platform*` bridge.
+///   cross-platform `Platform*` bridge, and a Highlightr-backed `SyntaxHighlighter`.
 ///   (The NSTableView-backed list now lives in the standalone FastList package:
 ///   https://github.com/adamtheturtle/FastList, the macOS pull-to-refresh bridge in
 ///   https://github.com/adamtheturtle/MacPullToRefresh, and the SwiftUI print/Save-as-PDF
@@ -30,8 +30,9 @@ let buddySwiftSettings: [SwiftSetting] = [
 ///   queue, a lenient array decoder, a generic Keychain account store, the
 ///   `DateWindow`/`NamedDateRange` list-filter primitives plus the `ListFilterCriteria`
 ///   seam, a `RevisionMemo` recompute-on-signature-change cache, the iCloud
-///   `CloudSyncMerge` strategies + `CloudSyncStore` key-value mirror, and the
-///   `AccountScoped` merged-row type + `MergedLoader` per-account fan-out).
+///   `CloudSyncMerge` strategies + `CloudSyncStore` key-value mirror, the
+///   `AccountScoped` merged-row type + `MergedLoader` per-account fan-out, and the
+///   optional Sparkle-backed `SoftwareUpdater` wrapper).
 ///
 /// Settings mirror the consuming app targets so the sources compile identically:
 /// Swift 6 language mode and MainActor default actor isolation, against which the
@@ -55,14 +56,20 @@ let package = Package(
         .package(url: "https://github.com/tevelee/SwiftUI-Flow", from: "3.4.0"),
         // Backs the reusable `MarkdownText` view. Pinned to the exact version the apps
         // use so everything resolves to one Textual revision.
-        .package(url: "https://github.com/adamtheturtle/textual", exact: "0.5.1")
+        .package(url: "https://github.com/adamtheturtle/textual", exact: "0.5.1"),
+        // Backs `SyntaxHighlighter`, matching the app's existing highlight.js wrapper.
+        .package(url: "https://github.com/raspu/Highlightr", from: "2.3.0"),
+        // Backs the optional `SoftwareUpdater` wrapper; the source remains `canImport`
+        // gated so consumers without Sparkle configuration do not start an updater.
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.3")
     ],
     targets: [
         .target(
             name: "BuddyDesignSystem",
             dependencies: [
                 .product(name: "Flow", package: "SwiftUI-Flow"),
-                .product(name: "Textual", package: "textual")
+                .product(name: "Textual", package: "textual"),
+                .product(name: "Highlightr", package: "Highlightr")
             ],
             swiftSettings: buddySwiftSettings
         ),
@@ -73,11 +80,17 @@ let package = Package(
         ),
         .target(
             name: "BuddyAppKit",
+            dependencies: [
+                .product(name: "Sparkle", package: "Sparkle", condition: .when(platforms: [.macOS]))
+            ],
             swiftSettings: buddySwiftSettings
         ),
         .testTarget(
             name: "BuddyAppKitTests",
-            dependencies: ["BuddyAppKit"],
+            dependencies: [
+                "BuddyAppKit",
+                .product(name: "Sparkle", package: "Sparkle", condition: .when(platforms: [.macOS]))
+            ],
             swiftSettings: buddySwiftSettings
         )
     ]
