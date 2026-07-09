@@ -12,6 +12,7 @@
 //
 
 import Foundation
+import Observation
 
 /// A generic `@Observable` health monitor for one account at a time. The app supplies
 /// the account id to probe, an async `probe`, and an `isUnauthorized` classifier, and
