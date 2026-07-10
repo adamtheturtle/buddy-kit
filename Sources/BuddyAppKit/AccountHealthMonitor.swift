@@ -57,6 +57,11 @@ public final class AccountHealthMonitor<AccountID: Hashable & Sendable> {
         self.isUnauthorized = isUnauthorized
     }
 
+    // Workaround: Xcode 26.5's optimizer crashes on this generic class's
+    // synthesized deinit; opt this type's deinit out of optimization.
+    @_optimize(none)
+    deinit {}
+
     /// Starts the periodic check (idempotent). Checks once immediately so a key already
     /// revoked before launch surfaces the banner now rather than one interval late, then
     /// re-checks every `interval` (default 30 min).

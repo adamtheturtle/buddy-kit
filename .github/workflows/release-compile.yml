@@ -1,0 +1,28 @@
+name: Release Compile
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  release-compile:
+    name: Release compile
+    runs-on: macos-26
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 26.5
+        run: sudo xcode-select -s /Applications/Xcode_26.5.app/Contents/Developer
+
+      - name: Show Swift version
+        run: swift --version
+
+      - name: Compile BuddyAppKit in Release
+        run: swift build -c release --target BuddyAppKit
+
+      - name: Compile BuddyDesignSystem in Release
+        run: swift build -c release --target BuddyDesignSystem
