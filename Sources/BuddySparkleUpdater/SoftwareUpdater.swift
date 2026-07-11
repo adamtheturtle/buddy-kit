@@ -1,18 +1,16 @@
 //
 //  SoftwareUpdater.swift
-//  BuddyAppKit
+//  BuddySparkleUpdater
 //
 
 import SwiftUI
 
-// Sparkle is only available on macOS. Apps provide the feed URL and EdDSA public key
-// through Info.plist keys `SUFeedURL` and `SUPublicEDKey`.
 #if canImport(Sparkle)
     import Sparkle
 
-    /// Thin wrapper over Sparkle's standard updater so the rest of the app touches
-    /// only this type, never Sparkle directly, keeping the dependency contained to
-    /// one file and behind the `canImport` gate above.
+    /// Thin wrapper over Sparkle's standard updater so direct-distribution apps touch
+    /// only this type, never Sparkle directly. Keep this product out of Mac App Store
+    /// targets so they don't link or embed Sparkle.
     @MainActor
     public final class SoftwareUpdater {
         public static let shared = SoftwareUpdater()

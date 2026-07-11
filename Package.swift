@@ -30,9 +30,10 @@ let buddySwiftSettings: [SwiftSetting] = [
 ///   queue, a lenient array decoder, a generic Keychain account store, the
 ///   `DateWindow`/`NamedDateRange` list-filter primitives plus the `ListFilterCriteria`
 ///   seam, a `RevisionMemo` recompute-on-signature-change cache, the iCloud
-///   `CloudSyncMerge` strategies + `CloudSyncStore` key-value mirror, the
-///   `AccountScoped` merged-row type + `MergedLoader` per-account fan-out, and the
-///   optional Sparkle-backed `SoftwareUpdater` wrapper).
+///   `CloudSyncMerge` strategies + `CloudSyncStore` key-value mirror, and the
+///   `AccountScoped` merged-row type + `MergedLoader` per-account fan-out).
+/// - `BuddySparkleUpdater` — optional Sparkle-backed update UI for direct
+///   distribution builds. Keep this out of Mac App Store targets.
 ///
 /// Settings mirror the consuming app targets so the sources compile identically:
 /// Swift 6 language mode and MainActor default actor isolation, against which the
@@ -48,7 +49,8 @@ let package = Package(
     platforms: [.macOS(.v15), .iOS(.v18)],
     products: [
         .library(name: "BuddyDesignSystem", targets: ["BuddyDesignSystem"]),
-        .library(name: "BuddyAppKit", targets: ["BuddyAppKit"])
+        .library(name: "BuddyAppKit", targets: ["BuddyAppKit"]),
+        .library(name: "BuddySparkleUpdater", targets: ["BuddySparkleUpdater"])
     ],
     dependencies: [
         // Backs the reusable `FlowLayout` wrapper. Pinned to the same major the apps
@@ -59,8 +61,9 @@ let package = Package(
         .package(url: "https://github.com/adamtheturtle/textual", exact: "0.5.1"),
         // Backs `SyntaxHighlighter`, matching the app's existing highlight.js wrapper.
         .package(url: "https://github.com/raspu/Highlightr", from: "2.3.0"),
-        // Backs the optional `SoftwareUpdater` wrapper; the source remains `canImport`
-        // gated so consumers without Sparkle configuration do not start an updater.
+        // Backs the optional `BuddySparkleUpdater` product. Keep it out of
+        // `BuddyAppKit` so Mac App Store targets can use the core utilities without
+        // embedding Sparkle.
         .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.3")
     ],
     targets: [
@@ -80,7 +83,12 @@ let package = Package(
         ),
         .target(
             name: "BuddyAppKit",
+            swiftSettings: buddySwiftSettings
+        ),
+        .target(
+            name: "BuddySparkleUpdater",
             dependencies: [
+                "BuddyAppKit",
                 .product(name: "Sparkle", package: "Sparkle", condition: .when(platforms: [.macOS]))
             ],
             swiftSettings: buddySwiftSettings
@@ -88,8 +96,7 @@ let package = Package(
         .testTarget(
             name: "BuddyAppKitTests",
             dependencies: [
-                "BuddyAppKit",
-                .product(name: "Sparkle", package: "Sparkle", condition: .when(platforms: [.macOS]))
+                "BuddyAppKit"
             ],
             swiftSettings: buddySwiftSettings
         )
