@@ -140,6 +140,13 @@ public final class KeychainAccountStore<Account: StorableAccount> {
         showAllAccounts && mergeableAccounts.count >= 2
     }
 
+    /// True while the latest accounts snapshot failed to reach the Keychain, so the
+    /// app can warn that in-memory changes will revert on relaunch instead of
+    /// silently losing them. The in-memory `accounts` array itself is the retryable
+    /// dirty state: ``retryPersistence()`` re-enqueues it, and any subsequent
+    /// successful write (every mutation rewrites the full snapshot) clears the flag.
+    public private(set) var persistenceFailed = false
+
     @ObservationIgnored private let config: Config
     @ObservationIgnored private let writeQueue = SerialWriteQueue()
 
@@ -214,15 +221,32 @@ public final class KeychainAccountStore<Account: StorableAccount> {
         // model never has to cross actors. Writes stay ordered via the queue so a slower
         // earlier write can't overwrite a newer snapshot.
         if accounts.isEmpty {
-            writeQueue.enqueue(priority: .userInitiated) { keychain.delete(account: key) }
+            writeQueue.enqueue(priority: .userInitiated) { [weak self] in
+                let succeeded = keychain.delete(account: key)
+                Task { @MainActor in self?.persistenceFailed = !succeeded }
+            }
             return
         }
         guard let data = config.encode(accounts) else {
             config.logger.error("Failed to encode accounts snapshot")
+            persistenceFailed = true
             return
         }
 
-        writeQueue.enqueue(priority: .userInitiated) { keychain.write(data, account: key) }
+        writeQueue.enqueue(priority: .userInitiated) { [weak self] in
+            let succeeded = keychain.write(data, account: key)
+            // Surface the outcome on the main actor: a failed write means the edit
+            // the UI just accepted will revert on relaunch, which the store must
+            // not keep to itself.
+            Task { @MainActor in self?.persistenceFailed = !succeeded }
+        }
+    }
+
+    /// Re-enqueues the current in-memory accounts snapshot after a failed write.
+    /// The snapshot is always whole (every mutation rewrites the full array), so
+    /// retrying persists everything that accumulated since the failure.
+    public func retryPersistence() {
+        persistAccounts()
     }
 
     private func persistCurrentID() {

@@ -53,7 +53,12 @@ public nonisolated struct KeychainStore: Sendable {
         return data
     }
 
-    public func write(_ data: Data, account: String) {
+    /// Returns whether the write actually reached the Keychain. Failures are logged
+    /// here, but callers that own user-visible state (e.g. ``KeychainAccountStore``)
+    /// should also surface them: a dropped write silently reverts the user's changes
+    /// on the next launch.
+    @discardableResult
+    public func write(_ data: Data, account: String) -> Bool {
         let query = baseQuery(account: account)
         let attrs: [String: Any] = [kSecValueData as String: data]
         let status = SecItemUpdate(query as CFDictionary, attrs as CFDictionary)
@@ -65,16 +70,29 @@ public nonisolated struct KeychainStore: Sendable {
                 logger.error(
                     "Keychain SecItemAdd failed for account '\(account, privacy: .public)' (OSStatus \(addStatus))"
                 )
+                return false
             }
         } else if status != errSecSuccess {
             logger.error(
                 "Keychain SecItemUpdate failed for account '\(account, privacy: .public)' (OSStatus \(status))"
             )
+            return false
         }
+        return true
     }
 
-    public func delete(account: String) {
+    /// Returns whether the item is gone afterwards; deleting an item that never
+    /// existed counts as success.
+    @discardableResult
+    public func delete(account: String) -> Bool {
         let query = baseQuery(account: account)
-        SecItemDelete(query as CFDictionary)
+        let status = SecItemDelete(query as CFDictionary)
+        if status != errSecSuccess, status != errSecItemNotFound {
+            logger.error(
+                "Keychain SecItemDelete failed for account '\(account, privacy: .public)' (OSStatus \(status))"
+            )
+            return false
+        }
+        return true
     }
 }
