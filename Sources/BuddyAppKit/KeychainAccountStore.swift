@@ -54,8 +54,13 @@ public final class KeychainAccountStore<Account: StorableAccount> {
         public var migrateIfEmpty: @MainActor () -> [Account]?
         public var onAccountsChanged: @MainActor ([Account]) -> Void
         public var onCurrentChanged: @MainActor (Account?) -> Void
-        public var onRemoved: @MainActor (UUID) -> Void
-        public var onRekeyed: @MainActor (UUID) -> Void
+        /// Receives the removed account itself (not just its id): app caches keyed
+        /// by the account's credentials (server + API key) can only be purged with
+        /// the full value in hand.
+        public var onRemoved: @MainActor (Account) -> Void
+        /// Receives the account's *previous* value, whose old credentials the app
+        /// must purge; the updated value is already in `accounts`.
+        public var onRekeyed: @MainActor (Account) -> Void
         public var logger: Logger
 
         public init(
@@ -70,8 +75,8 @@ public final class KeychainAccountStore<Account: StorableAccount> {
             migrateIfEmpty: @escaping @MainActor () -> [Account]?,
             onAccountsChanged: @escaping @MainActor ([Account]) -> Void,
             onCurrentChanged: @escaping @MainActor (Account?) -> Void,
-            onRemoved: @escaping @MainActor (UUID) -> Void,
-            onRekeyed: @escaping @MainActor (UUID) -> Void,
+            onRemoved: @escaping @MainActor (Account) -> Void,
+            onRekeyed: @escaping @MainActor (Account) -> Void,
             logger: Logger
         ) {
             self.keychain = keychain
@@ -173,18 +178,24 @@ public final class KeychainAccountStore<Account: StorableAccount> {
         let previous = accounts[index]
         accounts[index] = account
         // A changed key or server points at potentially different data (even a different
-        // org), so the app's caches keyed by this id no longer apply.
+        // org), so the app's caches keyed by this account no longer apply. Hand over the
+        // previous value: caches keyed by the old credentials need them to purge.
         if account.pointsAtDifferentBackend(than: previous) {
-            config.onRekeyed(account.accountID)
+            config.onRekeyed(previous)
         }
     }
 
     public func remove(id: UUID) {
+        // Captured before removal so the hook receives the full account — there's
+        // nothing to tear down when the id was never stored.
+        let removed = accounts.first { $0.accountID == id }
         accounts.removeAll { $0.accountID == id }
         if currentAccountID == id {
             currentAccountID = accounts.first?.accountID
         }
-        config.onRemoved(id)
+        if let removed {
+            config.onRemoved(removed)
+        }
     }
 
     private static func loadAccounts(config: Config) -> [Account]? {

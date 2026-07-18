@@ -25,8 +25,8 @@ private struct MockAccount: StorableAccount, Equatable {
 @MainActor
 private func makeStore(
     seed: [MockAccount],
-    onRemoved: @escaping @MainActor (UUID) -> Void = { _ in },
-    onRekeyed: @escaping @MainActor (UUID) -> Void = { _ in }
+    onRemoved: @escaping @MainActor (MockAccount) -> Void = { _ in },
+    onRekeyed: @escaping @MainActor (MockAccount) -> Void = { _ in }
 ) -> KeychainAccountStore<MockAccount> {
     let config = KeychainAccountStore<MockAccount>.Config(
         keychain: KeychainStore(service: "test.buddyappkit.unused", logger: Logger(subsystem: "test", category: "x")),
@@ -73,27 +73,32 @@ struct KeychainAccountStoreTests {
     @Test
     func `update fires onRekeyed only when the backend changes`() {
         let id = UUID()
-        var rekeyed: [UUID] = []
+        var rekeyed: [MockAccount] = []
         let store = makeStore(seed: [MockAccount(accountID: id, key: "a")], onRekeyed: { rekeyed.append($0) })
 
         store.update(MockAccount(accountID: id, key: "a")) // same key → no rekey
         #expect(rekeyed.isEmpty)
 
         store.update(MockAccount(accountID: id, key: "b")) // changed key → rekey
-        #expect(rekeyed == [id])
+        // The hook receives the *previous* value: the old credentials are what
+        // credential-keyed caches need to purge.
+        #expect(rekeyed == [MockAccount(accountID: id, key: "a")])
     }
 
     @Test
     func `remove drops the account, reselects, and fires onRemoved`() {
         let first = MockAccount(accountID: UUID(), key: "a")
         let second = MockAccount(accountID: UUID(), key: "b")
-        var removed: [UUID] = []
+        var removed: [MockAccount] = []
         let store = makeStore(seed: [first, second], onRemoved: { removed.append($0) })
 
         store.remove(id: first.accountID)
         #expect(store.accounts == [second])
         #expect(store.currentAccountID == second.accountID) // reselected the survivor
-        #expect(removed == [first.accountID])
+        #expect(removed == [first])
+
+        store.remove(id: first.accountID) // unknown id → no teardown to run
+        #expect(removed == [first])
     }
 
     @Test
