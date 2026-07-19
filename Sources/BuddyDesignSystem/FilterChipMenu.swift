@@ -156,6 +156,17 @@ public struct ChipMenuShell<MenuContent: View>: View {
 
 /// A categorical filter chip: a labelled menu of mutually exclusive options bound to
 /// an optional selection, with a checkmark on the current choice and a reset row.
+
+/// Localized once for the whole process rather than per construction.
+///
+/// `FilterChipMenu` is generic, which cannot hold a static stored property, so this
+/// lives beside it. As a default argument the lookup was evaluated at every call site
+/// that omitted it, and these chips are built inside a parent's `body` — so it ran on
+/// every render of the filter bar (#12).
+public enum FilterChipDefaults {
+    public static let resetLabel = String(localized: "All")
+}
+
 public struct FilterChipMenu<Option: Hashable>: View {
     let title: String
     let icon: String
@@ -165,6 +176,10 @@ public struct FilterChipMenu<Option: Hashable>: View {
     /// The label of the row that clears the filter. "All" reads naturally for the
     /// categorical chips (State, Language, …); callers can override it.
     var resetLabel: String
+    /// Built in `init`, not in `body`: it only depends on `title`, and evaluating it
+    /// per render meant a String Catalog lookup plus an interpolation for every chip
+    /// on every pass of a filter bar that rebuilds on each keystroke (#12).
+    let clearLabel: String
 
     public init(
         title: String,
@@ -172,7 +187,7 @@ public struct FilterChipMenu<Option: Hashable>: View {
         selected: Binding<Option?>,
         options: [Option],
         formatter: @escaping (Option) -> String,
-        resetLabel: String = String(localized: "All")
+        resetLabel: String = FilterChipDefaults.resetLabel
     ) {
         self.title = title
         self.icon = icon
@@ -180,6 +195,7 @@ public struct FilterChipMenu<Option: Hashable>: View {
         self.options = options
         self.formatter = formatter
         self.resetLabel = resetLabel
+        clearLabel = String(localized: "Clear \(title) filter")
     }
 
     /// Match SearchableFilterChip's selected/idle styling so a set filter always
@@ -211,7 +227,7 @@ public struct FilterChipMenu<Option: Hashable>: View {
             strokeColor: strokeColor,
             labelColor: labelColor,
             menuDisabled: options.isEmpty,
-            clearLabel: String(localized: "Clear \(title) filter"),
+            clearLabel: clearLabel,
             onClear: { selected = nil },
             menu: {
                 // The reset row carries the checkmark while nothing is selected, so

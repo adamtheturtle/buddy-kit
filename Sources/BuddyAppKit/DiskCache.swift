@@ -17,6 +17,15 @@ public nonisolated struct DiskCache: Sendable {
     /// "com.example.app/DataCache"). Injected so each app keeps its own location.
     public let directoryName: String
     private let logger: Logger
+    /// One coder pair per cache, not one per operation.
+    ///
+    /// These were built inside `load` and `save`, so a consumer reading and writing
+    /// per account and per kind allocated a fresh coder every time — including on the
+    /// cold-launch path, where snapshots for every account are merged before first
+    /// paint (#13). Both are `Sendable` and configured with default strategies, so a
+    /// shared instance behaves identically to a fresh one.
+    private let decoder = JSONDecoder()
+    private let encoder = JSONEncoder()
 
     public init(directoryName: String, logger: Logger) {
         self.directoryName = directoryName
@@ -37,7 +46,7 @@ public nonisolated struct DiskCache: Sendable {
               let data = try? Data(contentsOf: url) else { return nil }
 
         do {
-            return try JSONDecoder().decode(T.self, from: data)
+            return try decoder.decode(T.self, from: data)
         } catch {
             let reason = error.localizedDescription
             logger.error("Failed to decode \(kind, privacy: .public) cache: \(reason, privacy: .public)")
@@ -49,7 +58,7 @@ public nonisolated struct DiskCache: Sendable {
         guard let url = url(kind: kind, account: account) else { return }
 
         do {
-            let data = try JSONEncoder().encode(value)
+            let data = try encoder.encode(value)
             try data.write(to: url, options: .atomic)
         } catch {
             let reason = error.localizedDescription

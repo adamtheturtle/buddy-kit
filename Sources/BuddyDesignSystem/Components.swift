@@ -246,12 +246,21 @@ public struct AvatarCircle: View {
     var tint: Color = .accentColor
     /// When set, the avatar shows this SF Symbol (tinted) instead of the initials.
     var symbol: String?
+    /// Derived once, in `init`, rather than on every render.
+    ///
+    /// This used to be a computed property read by `body`, so each render re-walked
+    /// `label` through two `replacingOccurrences` passes, a `split`, a `map`, a
+    /// `compactMap`, a `joined`, and an `uppercased` — building throwaway collections
+    /// for a value whose only input is fixed at construction (#11). Avatars appear per
+    /// row in account pickers and member lists, so that ran many times per frame.
+    let initials: String
 
     public init(label: String, diameter: CGFloat = 32, tint: Color = .accentColor, symbol: String? = nil) {
         self.label = label
         self.diameter = diameter
         self.tint = tint
         self.symbol = symbol
+        initials = Self.initials(from: label)
     }
 
     public var body: some View {
@@ -274,14 +283,15 @@ public struct AvatarCircle: View {
         .accessibilityHidden(true)
     }
 
-    private var initials: String {
-        let parts = label
-            .replacingOccurrences(of: "@", with: " ")
-            .replacingOccurrences(of: ".", with: " ")
-            .split(separator: " ")
-            .map(String.init)
-        let letters = parts.prefix(2).compactMap { $0.first.map(String.init) }
-        let result = letters.joined().uppercased()
+    /// Up to two leading letters of `label`, treating `@` and `.` as separators so an
+    /// email address initials as its local part. `?` when nothing usable is left.
+    ///
+    /// One pass over the string, splitting on the separator set directly rather than
+    /// rewriting the string twice to normalize them first (#11).
+    static func initials(from label: String) -> String {
+        let parts = label.split(whereSeparator: { $0 == "@" || $0 == "." || $0 == " " })
+        let letters = parts.prefix(2).compactMap(\.first)
+        let result = String(letters).uppercased()
         return result.isEmpty ? "?" : result
     }
 }
