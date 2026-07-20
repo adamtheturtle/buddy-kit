@@ -9,6 +9,8 @@
 //  without touching any call site.
 //
 
+import Foundation
+
 #if os(macOS)
     import AppKit
 #elseif !os(tvOS)
