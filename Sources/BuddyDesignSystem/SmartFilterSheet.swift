@@ -139,7 +139,9 @@ public struct SmartFilterSheet: View {
                     Text("Apply")
                 }
             }
-            .keyboardShortcut(.defaultAction)
+            #if !os(tvOS)
+                .keyboardShortcut(.defaultAction)
+            #endif
             .buttonStyle(.borderedProminent)
             .disabled(isInterpreting || trimmed.isEmpty)
         }
