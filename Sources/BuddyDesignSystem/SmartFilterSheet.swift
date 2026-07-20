@@ -83,7 +83,9 @@ public struct SmartFilterSheet: View {
             header
             VStack(alignment: .leading, spacing: 6) {
                 TextField("", text: $text, prompt: Text(placeholder), axis: .vertical)
-                    .textFieldStyle(.roundedBorder)
+                    #if !os(tvOS)
+                        .textFieldStyle(.roundedBorder)
+                    #endif
                     .lineLimit(2 ... 4)
                     .font(.body)
                     .onSubmit(onSubmit)

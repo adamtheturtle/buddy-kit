@@ -35,6 +35,13 @@ public struct MarkdownText: View {
     }
 
     public var body: some View {
+        #if os(tvOS)
+            if raw.isEmpty {
+                Text("(empty)").foregroundStyle(.secondary)
+            } else {
+                structured.textual
+            }
+        #else
         if raw.isEmpty {
             Text("(empty)").foregroundStyle(.secondary)
         } else if isRasterizedForPrint {
@@ -46,6 +53,7 @@ public struct MarkdownText: View {
         } else {
             structured.textual.textSelection(.enabled)
         }
+        #endif
     }
 
     private var structured: some View {

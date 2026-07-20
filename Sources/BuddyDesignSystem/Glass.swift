@@ -42,7 +42,7 @@ public extension View {
             background(fallbackFill, in: shape)
                 .overlay(shape.stroke(fallbackStroke, lineWidth: fallbackStrokeWidth))
         #else
-            if #available(macOS 26, iOS 26, *) {
+            if #available(macOS 26, iOS 26, tvOS 26, *) {
                 let glass: Glass = (glassTint.map { Glass.regular.tint($0) } ?? .regular).interactive()
                 glassEffect(glass, in: shape)
             } else {
@@ -64,7 +64,7 @@ public func chipLabelColor(isActive: Bool) -> Color {
     guard isActive else { return .primary }
 
     #if !os(visionOS)
-        if #available(macOS 26, iOS 26, *) {
+        if #available(macOS 26, iOS 26, tvOS 26, *) {
             return .white
         }
     #endif
