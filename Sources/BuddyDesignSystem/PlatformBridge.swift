@@ -42,6 +42,8 @@ public extension Color {
     static var platformTextBackground: Color {
         #if os(macOS)
             Color(nsColor: .textBackgroundColor)
+        #elseif os(tvOS)
+            Color.primary.opacity(0.08)
         #else
             Color(uiColor: .secondarySystemBackground)
         #endif
@@ -52,6 +54,8 @@ public extension Color {
     static var platformControlBackground: Color {
         #if os(macOS)
             Color(nsColor: .controlBackgroundColor)
+        #elseif os(tvOS)
+            Color.primary.opacity(0.08)
         #else
             Color(uiColor: .systemGroupedBackground)
         #endif

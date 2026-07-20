@@ -56,6 +56,8 @@ public struct PopoverSelectionRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .onHover { hovered = $0 }
+        #if !os(tvOS)
+            .onHover { hovered = $0 }
+        #endif
     }
 }
