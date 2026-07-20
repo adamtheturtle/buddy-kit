@@ -39,7 +39,7 @@ public enum SpotlightKeywordGenerator {
     /// an enrichment pass entirely otherwise.
     public static var isAvailable: Bool {
         #if canImport(FoundationModels)
-            if #available(macOS 26, iOS 26, *) {
+            if #available(macOS 26, iOS 26, visionOS 26, *) {
                 return SystemLanguageModel.default.availability == .available
             }
         #endif
@@ -57,7 +57,7 @@ public enum SpotlightKeywordGenerator {
         guard !trimmed.isEmpty else { return [] }
 
         #if canImport(FoundationModels)
-            if #available(macOS 26, iOS 26, *) {
+            if #available(macOS 26, iOS 26, visionOS 26, *) {
                 guard SystemLanguageModel.default.availability == .available else { return [] }
 
                 let session = LanguageModelSession(instructions: instructions)

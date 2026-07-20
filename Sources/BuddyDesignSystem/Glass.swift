@@ -38,13 +38,18 @@ public extension View {
         fallbackStrokeWidth: CGFloat,
         in shape: some Shape = Capsule()
     ) -> some View {
-        if #available(macOS 26, iOS 26, *) {
-            let glass: Glass = (glassTint.map { Glass.regular.tint($0) } ?? .regular).interactive()
-            glassEffect(glass, in: shape)
-        } else {
+        #if os(visionOS)
             background(fallbackFill, in: shape)
                 .overlay(shape.stroke(fallbackStroke, lineWidth: fallbackStrokeWidth))
-        }
+        #else
+            if #available(macOS 26, iOS 26, *) {
+                let glass: Glass = (glassTint.map { Glass.regular.tint($0) } ?? .regular).interactive()
+                glassEffect(glass, in: shape)
+            } else {
+                background(fallbackFill, in: shape)
+                    .overlay(shape.stroke(fallbackStroke, lineWidth: fallbackStrokeWidth))
+            }
+        #endif
     }
 }
 
@@ -58,8 +63,10 @@ public extension View {
 public func chipLabelColor(isActive: Bool) -> Color {
     guard isActive else { return .primary }
 
-    if #available(macOS 26, iOS 26, *) {
-        return .white
-    }
+    #if !os(visionOS)
+        if #available(macOS 26, iOS 26, *) {
+            return .white
+        }
+    #endif
     return .accentColor
 }
