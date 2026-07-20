@@ -39,7 +39,7 @@ public struct MarkdownText: View {
             if raw.isEmpty {
                 Text("(empty)").foregroundStyle(.secondary)
             } else {
-                structured.textual
+                structured
             }
         #else
         if raw.isEmpty {
