@@ -143,7 +143,9 @@ public struct SavedSearchChip: View {
         )
         .contentShape(Self.tokenShape)
         .onTapGesture { onApply() }
-        .onHover { hovered = $0 }
+        #if !os(tvOS)
+            .onHover { hovered = $0 }
+        #endif
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(isActive ? [.isButton, .isSelected] : .isButton)
         .accessibilityLabel("Apply saved search \(name)")

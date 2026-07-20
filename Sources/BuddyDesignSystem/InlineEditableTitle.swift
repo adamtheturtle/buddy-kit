@@ -143,7 +143,9 @@ public struct InlineEditableTitle: View {
     /// The static title shown in read-only contexts — identical to a plain header.
     private var plainTitle: some View {
         Text(title)
-            .textSelection(.enabled)
+            #if !os(tvOS)
+                .textSelection(.enabled)
+            #endif
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -153,7 +155,9 @@ public struct InlineEditableTitle: View {
     private var editableTitle: some View {
         HStack(spacing: 6) {
             Text(title)
-                .textSelection(.enabled)
+                #if !os(tvOS)
+                    .textSelection(.enabled)
+                #endif
                 .fixedSize(horizontal: false, vertical: true)
                 .lineLimit(clampsWidth ? 1 : nil)
                 .truncationMode(.tail)
@@ -176,7 +180,9 @@ public struct InlineEditableTitle: View {
             Spacer(minLength: 0)
         }
         .contentShape(.rect)
-        .onHover { isHovering = $0 }
+        #if !os(tvOS)
+            .onHover { isHovering = $0 }
+        #endif
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.12), value: showsPencil)
         // The whole title is the affordance, so a click anywhere on it begins editing.
         .onTapGesture { beginEditing() }
