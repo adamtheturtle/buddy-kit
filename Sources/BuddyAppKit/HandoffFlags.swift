@@ -27,7 +27,7 @@ public extension NSUserActivity {
         isEligibleForHandoff = true
         isEligibleForSearch = true
         if let webpageURL { self.webpageURL = webpageURL }
-        #if !os(macOS)
+        #if os(iOS)
             isEligibleForPrediction = true
         #endif
     }
