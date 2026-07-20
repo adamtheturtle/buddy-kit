@@ -11,7 +11,7 @@
 
 #if os(macOS)
     import AppKit
-#else
+#elseif !os(tvOS)
     import UIKit
 #endif
 
@@ -21,7 +21,7 @@ public enum Clipboard {
         #if os(macOS)
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(text, forType: .string)
-        #else
+        #elseif !os(tvOS)
             UIPasteboard.general.string = text
         #endif
     }
@@ -36,7 +36,7 @@ public enum Clipboard {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(text, forType: .string)
             if let rtf { NSPasteboard.general.setData(rtf, forType: .rtf) }
-        #else
+        #elseif !os(tvOS)
             // UIPasteboard has no plain RTF type as a first-class slot; write the
             // plain string (the macOS RTF fallback isn't available on iOS).
             UIPasteboard.general.string = text

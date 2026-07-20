@@ -11,7 +11,9 @@
 //  carries no app-specific copy or defaults.
 //
 
-import LocalAuthentication
+#if !os(tvOS)
+    import LocalAuthentication
+#endif
 
 /// Biometric / device-owner authentication gate for revealing a stored secret or
 /// guarding a destructive toggle.
@@ -25,13 +27,21 @@ public enum BiometricGate {
 
     /// Whether this device can evaluate biometrics (Touch ID / Face ID) right now.
     public static var isBiometricsAvailable: Bool {
-        LAContext().canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil)
+        #if os(tvOS)
+            false
+        #else
+            LAContext().canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil)
+        #endif
     }
 
     /// Whether the device can evaluate device-owner authentication (Touch ID / Face ID
     /// *or* the account password / passcode) right now.
     public static var canEvaluateOwnerAuth: Bool {
-        LAContext().canEvaluatePolicy(.deviceOwnerAuthentication, error: nil)
+        #if os(tvOS)
+            false
+        #else
+            LAContext().canEvaluatePolicy(.deviceOwnerAuthentication, error: nil)
+        #endif
     }
 
     /// Authenticate before revealing a secret. Returns `true` immediately when no prompt
@@ -44,6 +54,9 @@ public enum BiometricGate {
     ///   - reason: the localized reason shown in the system prompt.
     @MainActor
     public static func authenticateForReveal(settingEnabled: Bool, reason: String) async -> Bool {
+        #if os(tvOS)
+            true
+        #else
         guard shouldPrompt(settingEnabled: settingEnabled, biometricsAvailable: isBiometricsAvailable) else {
             return true
         }
@@ -52,6 +65,7 @@ public enum BiometricGate {
         return await (try? context.evaluatePolicy(
             .deviceOwnerAuthenticationWithBiometrics, localizedReason: reason
         )) ?? false
+        #endif
     }
 
     /// Authenticate before *disabling* a reveal gate (or performing any change that
@@ -64,11 +78,15 @@ public enum BiometricGate {
     /// - Parameter reason: the localized reason shown in the system prompt.
     @MainActor
     public static func authenticateToDisableGate(reason: String) async -> Bool {
+        #if os(tvOS)
+            true
+        #else
         let context = LAContext()
         guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: nil) else { return true }
 
         return await (try? context.evaluatePolicy(
             .deviceOwnerAuthentication, localizedReason: reason
         )) ?? false
+        #endif
     }
 }
