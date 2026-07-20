@@ -15,6 +15,8 @@ import SwiftUI
 public extension Color {
     #if os(macOS)
         static let cardBackground = Color(nsColor: .controlBackgroundColor)
+    #elseif os(tvOS)
+        static let cardBackground = Color.primary.opacity(0.08)
     #else
         static let cardBackground = Color(uiColor: .secondarySystemBackground)
     #endif
