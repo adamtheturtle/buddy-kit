@@ -16,7 +16,7 @@
 //
 
 import Foundation
-#if canImport(FoundationModels) && !os(tvOS)
+#if canImport(FoundationModels) && arch(arm64) && !os(tvOS)
     import FoundationModels
 #endif
 
@@ -38,7 +38,7 @@ public enum SpotlightKeywordGenerator {
     /// Whether the on-device model can generate keywords right now, so a caller can skip
     /// an enrichment pass entirely otherwise.
     public static var isAvailable: Bool {
-        #if canImport(FoundationModels) && !os(tvOS)
+        #if canImport(FoundationModels) && arch(arm64) && !os(tvOS)
             if #available(macOS 26, iOS 26, visionOS 26, *) {
                 return SystemLanguageModel.default.availability == .available
             }
@@ -56,7 +56,7 @@ public enum SpotlightKeywordGenerator {
         let trimmed = brief.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
 
-        #if canImport(FoundationModels) && !os(tvOS)
+        #if canImport(FoundationModels) && arch(arm64) && !os(tvOS)
             if #available(macOS 26, iOS 26, visionOS 26, *) {
                 guard SystemLanguageModel.default.availability == .available else { return [] }
 
