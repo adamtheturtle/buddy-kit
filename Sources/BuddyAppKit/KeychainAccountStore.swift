@@ -62,6 +62,8 @@ public final class KeychainAccountStore<Account: StorableAccount> {
         /// must purge; the updated value is already in `accounts`.
         public var onRekeyed: @MainActor (Account) -> Void
         public var logger: Logger
+        /// Reports completion of each asynchronous accounts Keychain mutation on the main actor.
+        public var onPersistenceResult: @MainActor (Bool) -> Void
 
         public init(
             keychain: KeychainStore,
@@ -77,7 +79,8 @@ public final class KeychainAccountStore<Account: StorableAccount> {
             onCurrentChanged: @escaping @MainActor (Account?) -> Void,
             onRemoved: @escaping @MainActor (Account) -> Void,
             onRekeyed: @escaping @MainActor (Account) -> Void,
-            logger: Logger
+            logger: Logger,
+            onPersistenceResult: @escaping @MainActor (Bool) -> Void = { _ in }
         ) {
             self.keychain = keychain
             self.accountsKey = accountsKey
@@ -93,6 +96,7 @@ public final class KeychainAccountStore<Account: StorableAccount> {
             self.onRemoved = onRemoved
             self.onRekeyed = onRekeyed
             self.logger = logger
+            self.onPersistenceResult = onPersistenceResult
         }
     }
 
@@ -223,7 +227,10 @@ public final class KeychainAccountStore<Account: StorableAccount> {
         if accounts.isEmpty {
             writeQueue.enqueue(priority: .userInitiated) { [weak self] in
                 let succeeded = keychain.delete(account: key)
-                Task { @MainActor in self?.persistenceFailed = !succeeded }
+                Task { @MainActor in
+                    self?.persistenceFailed = !succeeded
+                    self?.config.onPersistenceResult(succeeded)
+                }
             }
             return
         }
@@ -238,7 +245,10 @@ public final class KeychainAccountStore<Account: StorableAccount> {
             // Surface the outcome on the main actor: a failed write means the edit
             // the UI just accepted will revert on relaunch, which the store must
             // not keep to itself.
-            Task { @MainActor in self?.persistenceFailed = !succeeded }
+            Task { @MainActor in
+                self?.persistenceFailed = !succeeded
+                self?.config.onPersistenceResult(succeeded)
+            }
         }
     }
 
