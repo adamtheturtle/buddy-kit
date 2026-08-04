@@ -139,6 +139,16 @@ struct RenderTests {
             SavedSearchChip(name: String(repeating: "x", count: 80), onApply: {}, onDelete: {}),
             "SavedSearchChip clamped long name"
         )
+        // Invalid public length inputs are normalized to a one-character ellipsis rather
+        // than reaching `prefix` as a negative length and trapping during rendering.
+        expectRenders(
+            SavedSearchChip(name: "Too long", maxNameLength: 0, onApply: {}),
+            "SavedSearchChip zero maximum length"
+        )
+        expectRenders(
+            SavedSearchChip(name: "Too long", maxNameLength: -1, onApply: {}),
+            "SavedSearchChip negative maximum length"
+        )
     }
 
     @Test func `smart filter sheet renders each state`() {
