@@ -36,7 +36,8 @@ public struct SavedSearchChip: View {
     ///     never drift out of sync with what's shown.
     ///   - maxNameLength: The character count past which the displayed name is
     ///     clamped with a trailing ellipsis (the full name stays in the a11y label).
-    ///     Defaults to 40, the limit new names are capped to on save.
+    ///     Values below one are treated as one. Defaults to 40, the limit new names
+    ///     are capped to on save.
     ///   - onApply: Applies this search's filters (the chip's primary tap action).
     ///   - onDelete: Deletes the saved search. Omit (`nil`) for built-in defaults,
     ///     which can't be deleted — then no delete glyph is shown.
@@ -51,7 +52,7 @@ public struct SavedSearchChip: View {
         self.name = name
         self.systemImage = systemImage
         self.isActive = isActive
-        self.maxNameLength = maxNameLength
+        self.maxNameLength = max(1, maxNameLength)
         self.onApply = onApply
         self.onDelete = onDelete
     }
