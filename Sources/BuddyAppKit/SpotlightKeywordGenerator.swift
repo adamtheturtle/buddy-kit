@@ -75,13 +75,19 @@ public enum SpotlightKeywordGenerator {
     }
 
     /// Splits the model's comma/newline-separated reply into trimmed, lowercased,
-    /// non-empty keywords, capped at six. Pure and off-main-safe, so the parse is
-    /// unit-testable without the model.
+    /// canonically normalized, unique keywords, capped at six. Pure and off-main-safe,
+    /// so the parse is unit-testable without the model.
     public nonisolated static func parse(_ reply: String) -> [String] {
-        let parsed = reply
+        let normalized = reply
             .split(whereSeparator: { $0 == "," || $0 == "\n" })
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+            .map {
+                $0.trimmingCharacters(in: .whitespacesAndNewlines)
+                    .lowercased()
+                    .precomposedStringWithCanonicalMapping
+            }
             .filter { !$0.isEmpty }
-        return Array(parsed.prefix(6))
+
+        var seen = Set<String>()
+        return Array(normalized.filter { seen.insert($0).inserted }.prefix(6))
     }
 }
