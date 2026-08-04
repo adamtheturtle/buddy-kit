@@ -34,4 +34,19 @@ struct InlineEditTests {
     @Test nonisolated func `commitValue is callable from a nonisolated context`() {
         #expect(InlineEdit.commitValue(original: "Old", edited: "New") == "New")
     }
+
+    @Test nonisolated func `return-triggered focus loss cannot claim a second commit`() {
+        var gate = InlineEditCommitGate()
+
+        // Return claims the commit slot synchronously. SwiftUI can then report the
+        // field's resulting focus loss before the asynchronous save finishes.
+        let returnClaimed = gate.claim()
+        let focusLossClaimed = gate.claim()
+        #expect(returnClaimed)
+        #expect(!focusLossClaimed)
+
+        gate.release()
+        let nextEditClaimed = gate.claim()
+        #expect(nextEditClaimed)
+    }
 }

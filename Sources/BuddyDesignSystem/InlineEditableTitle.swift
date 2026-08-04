@@ -35,6 +35,24 @@ public nonisolated enum InlineEdit {
     }
 }
 
+/// Tracks whether an inline edit already owns the single commit slot. Both Return
+/// and focus loss can arrive in the same run-loop turn, so the event handler must
+/// claim the slot synchronously before it creates any asynchronous work.
+nonisolated struct InlineEditCommitGate {
+    private(set) var isClaimed = false
+
+    mutating func claim() -> Bool {
+        guard !isClaimed else { return false }
+
+        isClaimed = true
+        return true
+    }
+
+    mutating func release() {
+        isClaimed = false
+    }
+}
+
 /// A title that reads as a plain heading until hovered/focused, then edits in place,
 /// committing on Return or focus-loss. Self-owning: it holds its own focus and draft
 /// and writes optimistically through `onCommit`, so the host only supplies the value
@@ -53,7 +71,7 @@ public struct InlineEditableTitle: View {
     @State private var isEditing = false
     @State private var draft = ""
     @State private var isHovering = false
-    @State private var isSaving = false
+    @State private var commitGate = InlineEditCommitGate()
     @FocusState private var fieldFocused: Bool
 
     /// While offline the app is read-only, so the title isn't editable (#321).
@@ -197,16 +215,16 @@ public struct InlineEditableTitle: View {
             TextField(placeholder, text: $draft)
                 .textFieldStyle(.plain)
                 .focused($fieldFocused)
-                .disabled(isSaving)
+                .disabled(commitGate.isClaimed)
                 .lineLimit(1)
                 .frame(maxWidth: fieldWidth, alignment: .leading)
-                .onSubmit { Task { await commit() } }
+                .onSubmit { requestCommit() }
                 // Commit when focus leaves the field (clicking elsewhere).
                 .onChange(of: fieldFocused) { _, focused in
-                    if !focused, isEditing { Task { await commit() } }
+                    if !focused, isEditing { requestCommit() }
                 }
 
-            if isSaving {
+            if commitGate.isClaimed {
                 ProgressView().controlSize(.small)
             }
         }
@@ -232,19 +250,21 @@ public struct InlineEditableTitle: View {
         fieldFocused = true
     }
 
-    private func commit() async {
-        guard isEditing, !isSaving else { return }
+    private func requestCommit() {
+        guard isEditing else { return }
         guard let value = InlineEdit.commitValue(original: title, edited: draft) else {
             // No change (or empty): just leave edit mode without writing.
             isEditing = false
             return
         }
+        guard commitGate.claim() else { return }
 
-        isSaving = true
-        let succeeded = await onCommit(value)
-        isSaving = false
-        isEditing = false
-        // On failure the host keeps the old title, so reverting is just leaving edit mode.
-        _ = succeeded
+        Task {
+            let succeeded = await onCommit(value)
+            commitGate.release()
+            isEditing = false
+            // On failure the host keeps the old title, so reverting is just leaving edit mode.
+            _ = succeeded
+        }
     }
 }
