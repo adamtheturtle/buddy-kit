@@ -3,7 +3,7 @@
 //  BuddyDesignSystemTests
 //
 
-import BuddyDesignSystem
+@testable import BuddyDesignSystem
 import Testing
 
 @MainActor
@@ -21,5 +21,21 @@ struct SyntaxHighlighterTests {
         let highlighted = await SyntaxHighlighter.highlight(source, language: "swift", dark: false)
 
         #expect(String(highlighted.characters) == source)
+    }
+
+    @Test("changing appearance invalidates cached platform colours")
+    func changingAppearanceInvalidatesCache() async {
+        let engine = HighlightrEngine()
+
+        _ = await engine.highlight("let light = true", language: "swift", dark: false)
+        #expect(await engine.cachedResultCount == 1)
+
+        _ = await engine.highlight("let dark = true", language: "swift", dark: true)
+        #expect(await engine.cachedResultCount == 1)
+
+        // Returning to light mode must not reuse colours resolved during the
+        // previous light appearance; the new result is the cache's sole entry.
+        _ = await engine.highlight("let light = true", language: "swift", dark: false)
+        #expect(await engine.cachedResultCount == 1)
     }
 }

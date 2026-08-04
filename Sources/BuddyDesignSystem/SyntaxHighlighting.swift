@@ -272,13 +272,16 @@ actor HighlightrEngine {
     /// the caller can fall back to the built-in lexer).
     func highlight(_ source: String, language: String?, dark: Bool) -> AttributedString? {
         guard let hljsName = Self.highlightJSName(for: language) else { return nil }
+        guard let highlightr else { return nil }
+
+        // Apply the requested appearance before consulting the memo. Switching
+        // appearance invalidates entries whose platform colours were resolved
+        // under the previous theme, including an older entry for this same key.
+        applyTheme(dark: dark)
 
         let key = CacheKey(contents: source, language: language, dark: dark)
         if let hit = cache[key] { return hit }
 
-        guard let highlightr else { return nil }
-
-        applyTheme(dark: dark)
         guard let rendered = highlightr.highlight(source, as: hljsName, fastRender: true) else { return nil }
 
         let result = Self.foregroundOnly(rendered)
@@ -310,7 +313,12 @@ actor HighlightrEngine {
         if currentTheme != themeName {
             _ = highlightr?.setTheme(to: themeName)
             currentTheme = themeName
+            cache.removeAll(keepingCapacity: true)
         }
+    }
+
+    var cachedResultCount: Int {
+        cache.count
     }
 
     /// Converts a Highlightr `NSAttributedString` into a SwiftUI
