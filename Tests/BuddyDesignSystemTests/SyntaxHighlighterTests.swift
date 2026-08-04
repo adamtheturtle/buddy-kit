@@ -38,4 +38,28 @@ struct SyntaxHighlighterTests {
         _ = await engine.highlight("let light = true", language: "swift", dark: false)
         #expect(await engine.cachedResultCount == 1)
     }
+
+    @Test("cache capacity evicts only the least-recently used result")
+    func cacheCapacityUsesLRUEviction() async {
+        let engine = HighlightrEngine()
+        let firstSource = "let value0 = 0"
+        let secondSource = "let value1 = 1"
+
+        for index in 0 ..< HighlightrEngine.cacheLimit {
+            _ = await engine.highlight("let value\(index) = \(index)", language: "swift", dark: false)
+        }
+
+        // Refresh the oldest entry, making the second insertion the LRU entry.
+        _ = await engine.highlight(firstSource, language: "swift", dark: false)
+        let overflowSource = "let overflow = true"
+        _ = await engine.highlight(overflowSource, language: "swift", dark: false)
+
+        let keptRecentlyUsed = await engine.containsCachedResult(firstSource, language: "swift", dark: false)
+        let evictedLeastRecentlyUsed = await engine.containsCachedResult(secondSource, language: "swift", dark: false)
+        let keptOverflow = await engine.containsCachedResult(overflowSource, language: "swift", dark: false)
+        #expect(await engine.cachedResultCount == HighlightrEngine.cacheLimit)
+        #expect(keptRecentlyUsed)
+        #expect(!evictedLeastRecentlyUsed)
+        #expect(keptOverflow)
+    }
 }
