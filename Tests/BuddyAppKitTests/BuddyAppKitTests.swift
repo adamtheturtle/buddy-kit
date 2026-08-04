@@ -29,11 +29,20 @@ struct BuddyAppKitTests {
     }
 
     @Test
-    func `LenientElement decodes a good value and nils a bad one without throwing`() throws {
+    func `LenientElement distinguishes decoded null and malformed values`() throws {
         let good = try JSONDecoder().decode(LenientElement<Int>.self, from: Data("7".utf8))
         #expect(good.value == 7)
+        #expect(good.decodingState == .value)
+        #expect(!good.isMalformed)
+
+        let null = try JSONDecoder().decode(LenientElement<Int>.self, from: Data("null".utf8))
+        #expect(null.value == nil)
+        #expect(null.decodingState == .null)
+        #expect(!null.isMalformed)
 
         let bad = try JSONDecoder().decode(LenientElement<Int>.self, from: Data("\"nope\"".utf8))
         #expect(bad.value == nil)
+        #expect(bad.decodingState == .malformed)
+        #expect(bad.isMalformed)
     }
 }
