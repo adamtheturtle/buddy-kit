@@ -34,4 +34,11 @@ struct SpotlightKeywordGeneratorTests {
         #expect(SpotlightKeywordGenerator.parse("").isEmpty)
         #expect(SpotlightKeywordGenerator.parse("  ,  \n ,").isEmpty)
     }
+
+    @Test
+    func `canonically equivalent keywords are returned once`() {
+        let decomposedCafe = "cafe\u{301}"
+        #expect(SpotlightKeywordGenerator.parse("Café, \(decomposedCafe), Trees")
+            == ["café", "trees"])
+    }
 }
