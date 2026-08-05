@@ -25,16 +25,27 @@ public enum RelativeDateLabel {
     }
 
     private static var cache: [Date: Labels] = [:]
+    private static var insertionOrder: [Date] = []
+    private static var nextEvictionIndex = 0
     private static var bucket = 0
+    /// Large enough to retain a full multi-thousand-row list while putting a
+    /// strict ceiling on adversarial or long-running high-cardinality callers.
+    static let cacheLimit = 4096
     /// Relative wording is coarse (minutes/hours/days), so a 30-second refresh window is
     /// imperceptible while keeping the cache hot across a selection's several renders.
     private static let bucketSeconds = 30.0
 
     public static func labels(for date: Date) -> Labels {
-        let now = Int(Date().timeIntervalSinceReferenceDate / bucketSeconds)
-        if now != bucket {
+        labels(for: date, now: Date())
+    }
+
+    static func labels(for date: Date, now: Date) -> Labels {
+        let currentBucket = Int(now.timeIntervalSinceReferenceDate / bucketSeconds)
+        if currentBucket != bucket {
             cache.removeAll(keepingCapacity: true)
-            bucket = now
+            insertionOrder.removeAll(keepingCapacity: true)
+            nextEvictionIndex = 0
+            bucket = currentBucket
         }
         if let hit = cache[date] {
             return hit
@@ -44,7 +55,23 @@ public enum RelativeDateLabel {
             relative: date.formatted(.relative(presentation: .named)),
             tooltip: date.formatted(date: .long, time: .shortened)
         )
+        if cache.count == cacheLimit {
+            let evictedDate = insertionOrder[nextEvictionIndex]
+            cache.removeValue(forKey: evictedDate)
+            insertionOrder[nextEvictionIndex] = date
+            nextEvictionIndex = (nextEvictionIndex + 1) % cacheLimit
+        } else {
+            insertionOrder.append(date)
+        }
         cache[date] = labels
         return labels
+    }
+
+    static var cachedLabelCount: Int {
+        cache.count
+    }
+
+    static func containsCachedLabels(for date: Date) -> Bool {
+        cache[date] != nil
     }
 }
