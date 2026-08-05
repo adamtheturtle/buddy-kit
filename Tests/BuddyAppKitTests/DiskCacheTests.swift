@@ -91,6 +91,29 @@ struct DiskCacheTests {
         #expect(cache.load(Snapshot.self, kind: "pads", account: account) == nil)
     }
 
+    @Test func `an oversized sparse snapshot is rejected without being materialized`() throws {
+        let limit = 1_024
+        let cache = DiskCache(
+            directoryName: "BuddyAppKitTests/\(UUID().uuidString)",
+            logger: Logger(subsystem: "BuddyAppKitTests", category: "disk-cache"),
+            maximumSnapshotBytes: limit
+        )
+        let account = UUID()
+        let base = try #require(FileManager.default.urls(
+            for: .applicationSupportDirectory, in: .userDomainMask
+        ).first)
+        let directory = base.appending(path: cache.directoryName, directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let file = directory.appending(path: "pads-\(account.uuidString).json")
+        #expect(FileManager.default.createFile(atPath: file.path, contents: nil))
+        let handle = try FileHandle(forWritingTo: file)
+        try handle.truncate(atOffset: 64 * 1_024 * 1_024)
+        try handle.close()
+
+        #expect(cache.load(Snapshot.self, kind: "pads", account: account) == nil)
+        #expect(FileManager.default.fileExists(atPath: file.path))
+    }
+
     @Test func `shared coders survive sustained concurrent saves and loads`() async {
         // Exercise both shared mutable coders repeatedly from concurrent tasks. Run
         // this test with Thread Sanitizer to verify operationLock prevents coder races.

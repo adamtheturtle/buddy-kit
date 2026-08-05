@@ -16,6 +16,9 @@ public nonisolated struct DiskCache: Sendable {
     /// The Application-Support-relative directory snapshots live under (e.g.
     /// "com.example.app/DataCache"). Injected so each app keeps its own location.
     public let directoryName: String
+    /// Maximum bytes read from one snapshot. The reader consumes at most this value
+    /// plus one byte, so oversized files are rejected without being materialized.
+    public let maximumSnapshotBytes: Int
     private let logger: Logger
     /// One coder pair per cache, not one per operation.
     ///
@@ -30,9 +33,10 @@ public nonisolated struct DiskCache: Sendable {
     /// atomic relative to one another, so cleanup can never remove a newer save.
     private let operationLock = NSLock()
 
-    public init(directoryName: String, logger: Logger) {
+    public init(directoryName: String, logger: Logger, maximumSnapshotBytes: Int = 10_000_000) {
         self.directoryName = directoryName
         self.logger = logger
+        self.maximumSnapshotBytes = max(0, maximumSnapshotBytes)
     }
 
     private func url(kind: String, account: UUID) -> URL? {
@@ -49,7 +53,7 @@ public nonisolated struct DiskCache: Sendable {
         defer { operationLock.unlock() }
 
         guard let url = url(kind: kind, account: account),
-              let data = try? Data(contentsOf: url) else { return nil }
+              let data = readSnapshot(at: url, kind: kind) else { return nil }
 
         do {
             return try decoder.decode(T.self, from: data)
@@ -64,6 +68,34 @@ public nonisolated struct DiskCache: Sendable {
                     "Failed to remove corrupt \(kind, privacy: .public) cache: \(removalReason, privacy: .public)"
                 )
             }
+            return nil
+        }
+    }
+
+    private func readSnapshot(at url: URL, kind: String) -> Data? {
+        do {
+            let handle = try FileHandle(forReadingFrom: url)
+            defer { try? handle.close() }
+            let readCeiling = maximumSnapshotBytes == Int.max
+                ? Int.max
+                : maximumSnapshotBytes + 1
+            var data = Data()
+
+            while data.count < readCeiling {
+                let bytesToRead = min(64 * 1024, readCeiling - data.count)
+                guard let chunk = try handle.read(upToCount: bytesToRead),
+                      !chunk.isEmpty else { return data }
+                data.append(chunk)
+            }
+
+            guard data.count <= maximumSnapshotBytes else {
+                logger.error(
+                    "Ignoring oversized \(kind, privacy: .public) cache: limit is \(self.maximumSnapshotBytes) bytes"
+                )
+                return nil
+            }
+            return data
+        } catch {
             return nil
         }
     }
