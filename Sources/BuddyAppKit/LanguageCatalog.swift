@@ -26,13 +26,17 @@ public extension String {
     nonisolated var languageDisplayName: String {
         if let name = LanguageCatalog.displayNames[lowercased()] { return name }
 
-        return isEmpty ? self : prefix(1).uppercased() + dropFirst()
+        return isEmpty ? self : capitalized(with: LanguageCatalog.fallbackLocale)
     }
 }
 
 /// The reconciled language-code -> display-name table backing ``Swift/String/languageDisplayName``.
 /// Exposed so callers that hold a code (not a `String` value) can look up directly.
 public enum LanguageCatalog {
+    /// A fixed locale keeps fallback casing deterministic across user language
+    /// settings while Foundation's title-casing preserves expanding characters.
+    nonisolated static let fallbackLocale = Locale(identifier: "en_US_POSIX")
+
     /// Canonical display names keyed by lower-cased code, including common aliases. A
     /// table rather than a `switch` so the lookup stays a single low-complexity
     /// expression. Superset of both apps' tables.
