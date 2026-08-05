@@ -18,6 +18,9 @@ import Foundation
 #endif
 
 public enum Clipboard {
+    /// Default ceiling for secrets such as tokens and generated configuration.
+    public static let sensitiveCopyByteLimit = 64 * 1024
+
     /// Replace the pasteboard contents with `text` as a plain string.
     public static func copy(_ text: String) {
         #if os(macOS)
@@ -42,6 +45,86 @@ public enum Clipboard {
             // UIPasteboard has no plain RTF type as a first-class slot; write the
             // plain string (the macOS RTF fallback isn't available on iOS).
             UIPasteboard.general.string = text
+        #endif
+    }
+
+    /// Copies bounded sensitive text and removes it after `expiresAfter` while the
+    /// process remains alive. The delayed clear is conditional on the pasteboard's
+    /// change count, so it never erases something the user copied afterward.
+    ///
+    /// - Returns: `false` without changing the pasteboard when the UTF-8 payload
+    ///   exceeds `maximumUTF8Bytes` or the platform has no writable pasteboard.
+    @discardableResult
+    public static func copySensitive(
+        _ text: String,
+        maximumUTF8Bytes: Int = sensitiveCopyByteLimit,
+        expiresAfter: Duration = .seconds(60)
+    ) -> Bool {
+        guard sensitiveTextFits(text, maximumUTF8Bytes: maximumUTF8Bytes) else { return false }
+        guard let copiedChangeCount = replacePlainText(text) else { return false }
+
+        Task { @MainActor in
+            await expireSensitiveCopy(
+                copiedChangeCount: copiedChangeCount,
+                sleep: {
+                    guard expiresAfter > .zero else { return }
+                    try await Task.sleep(for: expiresAfter)
+                },
+                currentChangeCount: pasteboardChangeCount,
+                clear: clearPasteboard
+            )
+        }
+        return true
+    }
+
+    static func sensitiveTextFits(_ text: String, maximumUTF8Bytes: Int) -> Bool {
+        maximumUTF8Bytes >= 0 && text.utf8.count <= maximumUTF8Bytes
+    }
+
+    static func expireSensitiveCopy(
+        copiedChangeCount: Int,
+        sleep: () async throws -> Void,
+        currentChangeCount: () -> Int?,
+        clear: () -> Void
+    ) async {
+        do {
+            try await sleep()
+        } catch {
+            return
+        }
+        guard currentChangeCount() == copiedChangeCount else { return }
+
+        clear()
+    }
+
+    private static func replacePlainText(_ text: String) -> Int? {
+        #if os(macOS)
+            NSPasteboard.general.clearContents()
+            guard NSPasteboard.general.setString(text, forType: .string) else { return nil }
+            return NSPasteboard.general.changeCount
+        #elseif !os(tvOS)
+            UIPasteboard.general.string = text
+            return UIPasteboard.general.changeCount
+        #else
+            return nil
+        #endif
+    }
+
+    private static func pasteboardChangeCount() -> Int? {
+        #if os(macOS)
+            NSPasteboard.general.changeCount
+        #elseif !os(tvOS)
+            UIPasteboard.general.changeCount
+        #else
+            nil
+        #endif
+    }
+
+    private static func clearPasteboard() {
+        #if os(macOS)
+            NSPasteboard.general.clearContents()
+        #elseif !os(tvOS)
+            UIPasteboard.general.items = []
         #endif
     }
 }
