@@ -41,4 +41,11 @@ struct SpotlightKeywordGeneratorTests {
         #expect(SpotlightKeywordGenerator.parse("Café, \(decomposedCafe), Trees")
             == ["café", "trees"])
     }
+
+    @Test
+    func `Unicode format controls are removed before indexing`() {
+        let reply = "bi\u{202E}nary search, dy\u{200B}namic programming, \u{2066}\u{2069}"
+
+        #expect(SpotlightKeywordGenerator.parse(reply) == ["binary search", "dynamic programming"])
+    }
 }

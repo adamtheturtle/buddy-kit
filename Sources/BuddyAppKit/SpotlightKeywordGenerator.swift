@@ -81,7 +81,8 @@ public enum SpotlightKeywordGenerator {
         let normalized = reply
             .split(whereSeparator: { $0 == "," || $0 == "\n" })
             .map {
-                $0.trimmingCharacters(in: .whitespacesAndNewlines)
+                String($0.unicodeScalars.filter { $0.properties.generalCategory != .format })
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
                     .lowercased()
                     .precomposedStringWithCanonicalMapping
             }
