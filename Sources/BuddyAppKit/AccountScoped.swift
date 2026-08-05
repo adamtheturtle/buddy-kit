@@ -20,7 +20,8 @@ public nonisolated struct AccountScoped<Account, Item> {
     public let item: Item
     /// An explicit row id, when the item's own id is already globally unique (e.g. a slug)
     /// and the app wants to keep it as the row identity. When nil, `id` is derived as
-    /// `"account.id|item.id"`, which stays distinct across accounts.
+    /// a length-prefixed pair, which stays distinct even when either component contains
+    /// separators.
     private let explicitID: String?
 
     public init(account: Account, item: Item) {
@@ -39,7 +40,13 @@ public nonisolated struct AccountScoped<Account, Item> {
 extension AccountScoped: Identifiable where Account: Identifiable, Item: Identifiable {
     /// Unique across accounts: the same item id in two accounts stays distinct, unless an
     /// explicit globally-unique id was supplied.
-    public var id: String { explicitID ?? "\(account.id)|\(item.id)" }
+    public var id: String {
+        if let explicitID { return explicitID }
+
+        let accountID = String(describing: account.id)
+        let itemID = String(describing: item.id)
+        return "\(accountID.utf8.count):\(accountID)\(itemID.utf8.count):\(itemID)"
+    }
 }
 
 extension AccountScoped: Sendable where Account: Sendable, Item: Sendable {}
