@@ -100,6 +100,50 @@ struct AccountHealthMonitorTests {
     }
 
     @Test
+    func `an older rejection cannot overwrite a newer success`() async {
+        let probes = ControlledProbes()
+        let monitor = AccountHealthMonitor<UUID>(
+            accountToCheck: { self.account },
+            probe: { _ in try await probes.run() },
+            isUnauthorized: Self.isUnauthorized
+        )
+
+        let older = Task { await monitor.check() }
+        await probes.waitUntilStarted(1)
+        let newer = Task { await monitor.check() }
+        await probes.waitUntilStarted(2)
+
+        await probes.succeed(1)
+        await newer.value
+        await probes.fail(0, with: FakeError.rejected)
+        await older.value
+
+        #expect(!monitor.isUnauthorized(account))
+    }
+
+    @Test
+    func `an older success cannot clear a newer rejection`() async {
+        let probes = ControlledProbes()
+        let monitor = AccountHealthMonitor<UUID>(
+            accountToCheck: { self.account },
+            probe: { _ in try await probes.run() },
+            isUnauthorized: Self.isUnauthorized
+        )
+
+        let older = Task { await monitor.check() }
+        await probes.waitUntilStarted(1)
+        let newer = Task { await monitor.check() }
+        await probes.waitUntilStarted(2)
+
+        await probes.fail(1, with: FakeError.rejected)
+        await newer.value
+        await probes.succeed(0)
+        await older.value
+
+        #expect(monitor.isUnauthorized(account))
+    }
+
+    @Test
     func `start is idempotent and the loop is cancellable`() async {
         let monitor = AccountHealthMonitor<UUID>(
             accountToCheck: { self.account },
@@ -112,5 +156,32 @@ struct AccountHealthMonitorTests {
         try? await Task.sleep(for: .milliseconds(50))
         monitor.stop()
         #expect(monitor.lastChecked != nil) // ran once immediately
+    }
+}
+
+private actor ControlledProbes {
+    private var continuations: [Int: CheckedContinuation<Void, any Error>] = [:]
+    private var startedCount = 0
+
+    func run() async throws {
+        let index = startedCount
+        startedCount += 1
+        try await withCheckedThrowingContinuation { continuation in
+            continuations[index] = continuation
+        }
+    }
+
+    func waitUntilStarted(_ count: Int) async {
+        while startedCount < count {
+            await Task.yield()
+        }
+    }
+
+    func succeed(_ index: Int) {
+        continuations.removeValue(forKey: index)?.resume()
+    }
+
+    func fail(_ index: Int, with error: any Error) {
+        continuations.removeValue(forKey: index)?.resume(throwing: error)
     }
 }
