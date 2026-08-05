@@ -13,10 +13,44 @@ import Testing
 @Suite("Biometric gate")
 struct BiometricGateTests {
     @Test
-    func `a reveal is challenged only when enabled and biometrics are available`() {
+    func `enabled protection remains challenged when biometrics are unavailable`() {
         #expect(BiometricGate.shouldPrompt(settingEnabled: true, biometricsAvailable: true))
+        #expect(BiometricGate.shouldPrompt(settingEnabled: true, biometricsAvailable: false))
         #expect(!BiometricGate.shouldPrompt(settingEnabled: false, biometricsAvailable: true))
-        #expect(!BiometricGate.shouldPrompt(settingEnabled: true, biometricsAvailable: false))
         #expect(!BiometricGate.shouldPrompt(settingEnabled: false, biometricsAvailable: false))
+    }
+
+    @Test
+    func `biometric policy transitions fall back or fail closed`() {
+        #expect(BiometricGate.revealAuthenticationPlan(
+            settingEnabled: false,
+            biometricsAvailable: false,
+            ownerAuthenticationAvailable: false,
+            biometricFailure: .notEnrolled
+        ) == .notRequired)
+        #expect(BiometricGate.revealAuthenticationPlan(
+            settingEnabled: true,
+            biometricsAvailable: true,
+            ownerAuthenticationAvailable: true,
+            biometricFailure: .unavailable
+        ) == .biometrics)
+        #expect(BiometricGate.revealAuthenticationPlan(
+            settingEnabled: true,
+            biometricsAvailable: false,
+            ownerAuthenticationAvailable: true,
+            biometricFailure: .notEnrolled
+        ) == .ownerAuthentication(.notEnrolled))
+        #expect(BiometricGate.revealAuthenticationPlan(
+            settingEnabled: true,
+            biometricsAvailable: false,
+            ownerAuthenticationAvailable: true,
+            biometricFailure: .lockout
+        ) == .ownerAuthentication(.lockout))
+        #expect(BiometricGate.revealAuthenticationPlan(
+            settingEnabled: true,
+            biometricsAvailable: false,
+            ownerAuthenticationAvailable: false,
+            biometricFailure: .lockout
+        ) == .unavailable(.lockout))
     }
 }
