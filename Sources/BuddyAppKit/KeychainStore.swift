@@ -11,6 +11,29 @@ import Foundation
 import os
 import Security
 
+/// Distinguishes an absent Keychain item from failures that must not be treated as
+/// an empty store (for example locked interaction or a missing entitlement).
+public nonisolated enum KeychainReadResult: Sendable, Equatable {
+    case value(Data)
+    case notFound
+    case failure(OSStatus)
+
+    var allowsEmptyStoreMigration: Bool {
+        self == .notFound
+    }
+
+    static func classify(status: OSStatus, data: Data?) -> Self {
+        switch status {
+        case errSecSuccess:
+            data.map(Self.value) ?? .failure(errSecDecode)
+        case errSecItemNotFound:
+            .notFound
+        default:
+            .failure(status)
+        }
+    }
+}
+
 public nonisolated struct KeychainStore: Sendable {
     /// The Keychain service the items are stored under. INJECTED, and a hard
     /// compatibility contract: an app must keep the same string forever or existing
@@ -42,14 +65,25 @@ public nonisolated struct KeychainStore: Sendable {
         ]
     }
 
-    public func readData(account: String) -> Data? {
+    public func read(account: String) -> KeychainReadResult {
         var query = baseQuery(account: account)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
-        guard status == errSecSuccess, let data = item as? Data else { return nil }
+        let result = KeychainReadResult.classify(status: status, data: item as? Data)
+        if case let .failure(status) = result {
+            logger.error(
+                "Keychain SecItemCopyMatching failed for account '\(account, privacy: .public)' (OSStatus \(status))"
+            )
+        }
+        return result
+    }
 
+    /// Compatibility convenience for consumers that intentionally treat every failure
+    /// as absence. Persistence owners should use ``read(account:)`` instead.
+    public func readData(account: String) -> Data? {
+        guard case let .value(data) = read(account: account) else { return nil }
         return data
     }
 

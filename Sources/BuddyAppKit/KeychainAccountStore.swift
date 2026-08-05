@@ -11,6 +11,7 @@
 
 import Foundation
 import os
+import Security
 
 /// The minimum an account model must provide to live in ``KeychainAccountStore``.
 /// Deliberately requires only two nonisolated members — NOT `Codable`/`Hashable`/
@@ -64,6 +65,10 @@ public final class KeychainAccountStore<Account: StorableAccount> {
         public var logger: Logger
         /// Reports completion of each asynchronous accounts Keychain mutation on the main actor.
         public var onPersistenceResult: @MainActor (Bool) -> Void
+        /// Injectable typed read used at startup. The default reads the configured Keychain.
+        public var readAccounts: @MainActor (KeychainStore, String) -> KeychainReadResult
+        /// Surfaces a startup Keychain failure so the host can present recovery UI.
+        public var onReadFailure: @MainActor (OSStatus) -> Void
 
         public init(
             keychain: KeychainStore,
@@ -80,7 +85,11 @@ public final class KeychainAccountStore<Account: StorableAccount> {
             onRemoved: @escaping @MainActor (Account) -> Void,
             onRekeyed: @escaping @MainActor (Account) -> Void,
             logger: Logger,
-            onPersistenceResult: @escaping @MainActor (Bool) -> Void = { _ in }
+            onPersistenceResult: @escaping @MainActor (Bool) -> Void = { _ in },
+            readAccounts: @escaping @MainActor (KeychainStore, String) -> KeychainReadResult = {
+                $0.read(account: $1)
+            },
+            onReadFailure: @escaping @MainActor (OSStatus) -> Void = { _ in }
         ) {
             self.keychain = keychain
             self.accountsKey = accountsKey
@@ -97,6 +106,8 @@ public final class KeychainAccountStore<Account: StorableAccount> {
             self.onRekeyed = onRekeyed
             self.logger = logger
             self.onPersistenceResult = onPersistenceResult
+            self.readAccounts = readAccounts
+            self.onReadFailure = onReadFailure
         }
     }
 
@@ -154,6 +165,8 @@ public final class KeychainAccountStore<Account: StorableAccount> {
     /// dirty state: ``retryPersistence()`` re-enqueues it, and any subsequent
     /// successful write (every mutation rewrites the full snapshot) clears the flag.
     public private(set) var persistenceFailed = false
+    /// The OSStatus from a failed startup read, or nil when the item loaded or was absent.
+    public private(set) var readFailureStatus: OSStatus?
 
     @ObservationIgnored private let config: Config
     @ObservationIgnored private let writeQueue = SerialWriteQueue()
@@ -166,7 +179,18 @@ public final class KeychainAccountStore<Account: StorableAccount> {
             currentAccountID = accounts.first?.accountID
             return
         }
-        let stored = Self.loadAccounts(config: config) ?? []
+        let readResult = config.readAccounts(config.keychain, config.accountsKey)
+        let stored: [Account]
+        switch readResult {
+        case let .value(data):
+            stored = config.decode(data)
+        case .notFound:
+            stored = []
+        case let .failure(status):
+            stored = []
+            readFailureStatus = status
+            config.onReadFailure(status)
+        }
         let loaded = Self.repairDuplicateAccountIDs(stored)
         var shouldPersistRepair = loaded.count != stored.count
         accounts = loaded
@@ -178,7 +202,10 @@ public final class KeychainAccountStore<Account: StorableAccount> {
             currentAccountID = loaded.first?.accountID
         }
 
-        if loaded.isEmpty, let migrated = config.migrateIfEmpty(), !migrated.isEmpty {
+        if readResult.allowsEmptyStoreMigration,
+           loaded.isEmpty,
+           let migrated = config.migrateIfEmpty(),
+           !migrated.isEmpty {
             let repairedMigration = Self.repairDuplicateAccountIDs(migrated)
             accounts = repairedMigration
             currentAccountID = repairedMigration.first?.accountID
@@ -225,12 +252,6 @@ public final class KeychainAccountStore<Account: StorableAccount> {
         if let removed {
             config.onRemoved(removed)
         }
-    }
-
-    private static func loadAccounts(config: Config) -> [Account]? {
-        guard let data = config.keychain.readData(account: config.accountsKey) else { return nil }
-
-        return config.decode(data)
     }
 
     /// Keeps the last snapshot for each ID and preserves the relative order of those
