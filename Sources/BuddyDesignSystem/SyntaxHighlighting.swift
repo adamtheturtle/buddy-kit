@@ -255,16 +255,22 @@ actor HighlightrEngine {
 
     private let highlightr = Highlightr()
     private var currentTheme: String?
-    private var cache: [CacheKey: AttributedString] = [:]
+    private var cache: [CacheKey: CacheEntry] = [:]
+    private var cacheAccessOrdinal: UInt64 = 0
     /// Cap the memo so a long session browsing many files can't grow it without
-    /// bound. Clearing wholesale on overflow keeps the logic trivial; the
-    /// recompute cost is a one-off and rare.
-    private static let cacheLimit = 64
+    /// bound. The least-recently used entry is evicted at capacity so the other
+    /// hot previews remain available.
+    static let cacheLimit = 64
 
     private struct CacheKey: Hashable {
         let contents: String
         let language: String?
         let dark: Bool
+    }
+
+    private struct CacheEntry {
+        let result: AttributedString
+        var lastAccess: UInt64
     }
 
     /// Highlights `source`, returning a foreground-coloured attributed string,
@@ -280,13 +286,20 @@ actor HighlightrEngine {
         applyTheme(dark: dark)
 
         let key = CacheKey(contents: source, language: language, dark: dark)
-        if let hit = cache[key] { return hit }
+        if var hit = cache[key] {
+            hit.lastAccess = nextCacheAccessOrdinal()
+            cache[key] = hit
+            return hit.result
+        }
 
         guard let rendered = highlightr.highlight(source, as: hljsName, fastRender: true) else { return nil }
 
         let result = Self.foregroundOnly(rendered)
-        if cache.count >= Self.cacheLimit { cache.removeAll(keepingCapacity: true) }
-        cache[key] = result
+        if cache.count >= Self.cacheLimit,
+           let leastRecentlyUsed = cache.min(by: { $0.value.lastAccess < $1.value.lastAccess })?.key {
+            cache.removeValue(forKey: leastRecentlyUsed)
+        }
+        cache[key] = CacheEntry(result: result, lastAccess: nextCacheAccessOrdinal())
         return result
     }
 
@@ -314,11 +327,21 @@ actor HighlightrEngine {
             _ = highlightr?.setTheme(to: themeName)
             currentTheme = themeName
             cache.removeAll(keepingCapacity: true)
+            cacheAccessOrdinal = 0
         }
+    }
+
+    private func nextCacheAccessOrdinal() -> UInt64 {
+        cacheAccessOrdinal &+= 1
+        return cacheAccessOrdinal
     }
 
     var cachedResultCount: Int {
         cache.count
+    }
+
+    func containsCachedResult(_ source: String, language: String?, dark: Bool) -> Bool {
+        cache[CacheKey(contents: source, language: language, dark: dark)] != nil
     }
 
     /// Converts a Highlightr `NSAttributedString` into a SwiftUI
