@@ -45,6 +45,13 @@ struct LanguageCatalogTests {
     }
 
     @Test
+    func `unknown codes title-case expanding first graphemes once`() {
+        #expect("ßlang".languageDisplayName == "Sslang")
+        #expect("ﬃscript".languageDisplayName == "Ffiscript")
+        #expect("ǳcode".languageDisplayName == "ǲcode")
+    }
+
+    @Test
     func `the backing table is exposed for direct lookup`() {
         #expect(LanguageCatalog.displayNames["c++"] == "C++")
     }
