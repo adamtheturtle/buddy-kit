@@ -31,11 +31,11 @@ public final class CloudSyncStore {
     /// in `userInfo["key"]`, so the owning store can re-pull and merge.
     public static let didChangeExternally = Notification.Name("CloudSyncStore.didChangeExternally")
 
-    /// Held so the external-change observation task isn't cancelled; the store is a
-    /// singleton that lives for the whole process, so it's never explicitly stopped.
+    /// Held so observation stays active until ``stop()`` explicitly tears it down.
     private var observerTask: Task<Void, Never>?
     private var identityObserverTask: Task<Void, Never>?
     private var activationState = CloudSyncActivationState()
+    private var observationState = CloudSyncObservationState()
     private var configuredUbiquityEntitlement = false
 
     private init() {}
@@ -85,8 +85,8 @@ public final class CloudSyncStore {
     /// entitlement there. Calling this after ``start()`` also retries activation.
     public func configureUbiquityKeyValueStore(entitled: Bool) {
         configuredUbiquityEntitlement = entitled
-        if identityObserverTask != nil {
-            activateIfAvailable()
+        if let generation = observationState.currentGeneration {
+            activateIfAvailable(generation: generation)
         }
     }
 
@@ -94,20 +94,35 @@ public final class CloudSyncStore {
     /// user signs in after launch, the store activates as soon as that identity-change
     /// notification arrives.
     public func start() {
-        guard identityObserverTask == nil else { return }
+        guard let generation = observationState.start() else { return }
 
         identityObserverTask = Task { @MainActor [weak self] in
             for await _ in NotificationCenter.default.notifications(
                 named: Notification.Name.NSUbiquityIdentityDidChange
             ) {
-                self?.activateIfAvailable()
+                guard let self,
+                      !Task.isCancelled,
+                      self.observationState.isCurrent(generation) else { return }
+                self.activateIfAvailable(generation: generation)
             }
         }
-        activateIfAvailable()
+        activateIfAvailable(generation: generation)
     }
 
-    private func activateIfAvailable() {
-        guard activationState.consumeAvailability(isAvailable) else { return }
+    /// Cancels all notification work. Generation checks also discard any notification
+    /// already queued on the main actor before cancellation took effect.
+    public func stop() {
+        observationState.stop()
+        identityObserverTask?.cancel()
+        identityObserverTask = nil
+        observerTask?.cancel()
+        observerTask = nil
+        activationState.reset()
+    }
+
+    private func activateIfAvailable(generation: UInt64) {
+        guard observationState.isCurrent(generation),
+              activationState.consumeAvailability(isAvailable) else { return }
 
         // No object filter: the default KVS is the only poster of this notification, so
         // the name alone is exact — and the async sequence's `object:` wants a Sendable,
@@ -116,8 +131,11 @@ public final class CloudSyncStore {
             for await note in NotificationCenter.default.notifications(
                 named: NSUbiquitousKeyValueStore.didChangeExternallyNotification
             ) {
+                guard let self,
+                      !Task.isCancelled,
+                      self.observationState.isCurrent(generation) else { return }
                 let keys = (note.userInfo?[NSUbiquitousKeyValueStoreChangedKeysKey] as? [String]) ?? []
-                self?.broadcast(changedKeys: keys)
+                self.broadcast(changedKeys: keys)
             }
         }
         store.synchronize()
@@ -175,6 +193,35 @@ nonisolated struct CloudSyncActivationState: Sendable {
         guard isAvailable, !hasActivated else { return false }
         hasActivated = true
         return true
+    }
+
+    mutating func reset() {
+        hasActivated = false
+    }
+}
+
+nonisolated struct CloudSyncObservationState: Sendable {
+    private var generation: UInt64 = 0
+    private var isRunning = false
+
+    var currentGeneration: UInt64? {
+        isRunning ? generation : nil
+    }
+
+    mutating func start() -> UInt64? {
+        guard !isRunning else { return nil }
+        generation &+= 1
+        isRunning = true
+        return generation
+    }
+
+    mutating func stop() {
+        generation &+= 1
+        isRunning = false
+    }
+
+    func isCurrent(_ candidate: UInt64) -> Bool {
+        isRunning && candidate == generation
     }
 }
 

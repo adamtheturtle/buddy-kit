@@ -7,6 +7,26 @@
 import Testing
 
 struct CloudSyncStoreTests {
+    @Test("stopped observation rejects queued and prior-generation changes")
+    func stoppedObservationRejectsStaleWork() throws {
+        var state = CloudSyncObservationState()
+        let firstCandidate = state.start()
+        let first = try #require(firstCandidate)
+        let duplicateStart = state.start()
+
+        #expect(duplicateStart == nil)
+        #expect(state.isCurrent(first))
+
+        state.stop()
+        #expect(!state.isCurrent(first))
+
+        let restartedCandidate = state.start()
+        let restarted = try #require(restartedCandidate)
+        #expect(restarted != first)
+        #expect(!state.isCurrent(first))
+        #expect(state.isCurrent(restarted))
+    }
+
     @Test("iOS provisioned hosts can explicitly enable iCloud KVS")
     func explicitEntitlementConfiguration() {
         #expect(!CloudSyncEntitlementGate.allowsStore(
