@@ -36,6 +36,7 @@ public final class CloudSyncStore {
     private var observerTask: Task<Void, Never>?
     private var identityObserverTask: Task<Void, Never>?
     private var activationState = CloudSyncActivationState()
+    private var configuredUbiquityEntitlement = false
 
     private init() {}
 
@@ -50,25 +51,43 @@ public final class CloudSyncStore {
     /// Checked once via the code signature: being signed into iCloud is NOT enough
     /// (`ubiquityIdentityToken` is non-nil whenever iCloud is on, entitlement or not), so
     /// this is the gate that keeps KVS untouched on an unprovisioned build.
-    private static let hasUbiquityEntitlement: Bool = {
+    private static let detectedUbiquityEntitlement: Bool? = {
         #if os(macOS)
             guard let task = SecTaskCreateFromSelf(nil) else { return false }
 
             let key = "com.apple.developer.ubiquity-kvstore-identifier" as CFString
             return SecTaskCopyValueForEntitlement(task, key, nil) != nil
         #else
-            // iOS/iPadOS has no `SecTask` self-entitlement read. Keep iCloud KVS dormant
-            // here until a provisioned entitlement check is wired in; `isAvailable` stays
-            // false so the KVS is never touched unprovisioned.
-            return false
+            // iOS/iPadOS has no public equivalent of the macOS SecTask check. The host
+            // must explicitly confirm its provisioned capability before KVS is touched.
+            return nil
         #endif
     }()
+
+    private var hasUbiquityEntitlement: Bool {
+        CloudSyncEntitlementGate.allowsStore(
+            runtimeDetected: Self.detectedUbiquityEntitlement,
+            hostConfigured: configuredUbiquityEntitlement
+        )
+    }
 
     /// True only when iCloud is genuinely usable: the app is provisioned with the KVS
     /// entitlement AND the user is signed into iCloud. Correctly false on an
     /// unprovisioned build, so the KVS is never initialized there.
     public var isAvailable: Bool {
-        Self.hasUbiquityEntitlement && FileManager.default.ubiquityIdentityToken != nil
+        hasUbiquityEntitlement && FileManager.default.ubiquityIdentityToken != nil
+    }
+
+    /// Confirms that the host target carries the iCloud key-value-store entitlement.
+    /// iOS/iPadOS apps must call this with `true` before ``start()`` because those
+    /// platforms expose no public runtime entitlement inspection API. macOS continues
+    /// to use its code-signature check, so configuration cannot override a missing
+    /// entitlement there. Calling this after ``start()`` also retries activation.
+    public func configureUbiquityKeyValueStore(entitled: Bool) {
+        configuredUbiquityEntitlement = entitled
+        if identityObserverTask != nil {
+            activateIfAvailable()
+        }
     }
 
     /// Begins observing iCloud availability and external changes. Idempotent; if the
@@ -156,5 +175,11 @@ nonisolated struct CloudSyncActivationState: Sendable {
         guard isAvailable, !hasActivated else { return false }
         hasActivated = true
         return true
+    }
+}
+
+nonisolated enum CloudSyncEntitlementGate {
+    static func allowsStore(runtimeDetected: Bool?, hostConfigured: Bool) -> Bool {
+        runtimeDetected ?? hostConfigured
     }
 }
