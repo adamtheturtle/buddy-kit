@@ -91,19 +91,26 @@ struct DiskCacheTests {
         #expect(cache.load(Snapshot.self, kind: "pads", account: account) == nil)
     }
 
-    @Test func `concurrent saves and loads across accounts round-trip`() async {
-        // The coders are shared across calls now, and DiskCache is Sendable, so
-        // concurrent use has to stay correct (#13).
+    @Test func `shared coders survive sustained concurrent saves and loads`() async {
+        // Exercise both shared mutable coders repeatedly from concurrent tasks. Run
+        // this test with Thread Sanitizer to verify operationLock prevents coder races.
         let cache = makeCache()
-        let accounts = (0 ..< 8).map { _ in UUID() }
+        let accounts = (0 ..< 32).map { _ in UUID() }
         await withTaskGroup(of: Bool.self) { group in
             for (index, account) in accounts.enumerated() {
                 group.addTask {
-                    let value = Snapshot(id: index,
-                                         title: "concurrent \(index)",
-                                         updatedAt: Date(timeIntervalSince1970: Double(index)))
-                    cache.save(value, kind: "pads", account: account)
-                    return cache.load(Snapshot.self, kind: "pads", account: account) == value
+                    for iteration in 0 ..< 20 {
+                        let value = Snapshot(
+                            id: index * 20 + iteration,
+                            title: "concurrent \(index)-\(iteration)",
+                            updatedAt: Date(timeIntervalSince1970: Double(iteration))
+                        )
+                        cache.save(value, kind: "pads", account: account)
+                        guard cache.load(Snapshot.self, kind: "pads", account: account) == value else {
+                            return false
+                        }
+                    }
+                    return true
                 }
             }
             for await roundTripped in group {
