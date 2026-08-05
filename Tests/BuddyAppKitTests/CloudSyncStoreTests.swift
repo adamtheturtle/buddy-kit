@@ -4,9 +4,23 @@
 //
 
 @testable import BuddyAppKit
+import Foundation
 import Testing
 
 struct CloudSyncStoreTests {
+    @Test("cloud data reads reject values above the configured byte cap")
+    func dataReadSizeLimit() {
+        let limit = 4
+
+        #expect(CloudSyncDataSizePolicy.isWithinLimit(
+            Data(repeating: 0, count: limit), maximumBytes: limit
+        ))
+        #expect(!CloudSyncDataSizePolicy.isWithinLimit(
+            Data(repeating: 0, count: limit + 1), maximumBytes: limit
+        ))
+        #expect(!CloudSyncDataSizePolicy.isWithinLimit(Data(), maximumBytes: -1))
+    }
+
     @Test("stopped observation rejects queued and prior-generation changes")
     func stoppedObservationRejectsStaleWork() throws {
         var state = CloudSyncObservationState()
