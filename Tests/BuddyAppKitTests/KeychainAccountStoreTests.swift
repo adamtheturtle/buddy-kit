@@ -8,7 +8,7 @@
 //  touches the real Keychain or UserDefaults.
 //
 
-import BuddyAppKit
+@testable import BuddyAppKit
 import Foundation
 import os
 import Testing
@@ -50,6 +50,28 @@ private func makeStore(
 @Suite("KeychainAccountStore in-memory logic")
 @MainActor
 struct KeychainAccountStoreTests {
+    @Test
+    nonisolated func `older persistence completions cannot replace the latest result`() {
+        var results = PersistenceResultState()
+        let older = results.schedule()
+        let newer = results.schedule()
+
+        let newerApplied = results.apply(succeeded: true, generation: newer)
+        #expect(newerApplied)
+        #expect(!results.failed)
+        let olderFailureApplied = results.apply(succeeded: false, generation: older)
+        #expect(!olderFailureApplied)
+        #expect(!results.failed)
+
+        let latest = results.schedule()
+        let latestApplied = results.apply(succeeded: false, generation: latest)
+        #expect(latestApplied)
+        #expect(results.failed)
+        let olderSuccessApplied = results.apply(succeeded: true, generation: newer)
+        #expect(!olderSuccessApplied)
+        #expect(results.failed)
+    }
+
     @Test
     func `testing mode seeds the accounts and selects the first`() {
         let a = MockAccount(accountID: UUID(), key: "a")
