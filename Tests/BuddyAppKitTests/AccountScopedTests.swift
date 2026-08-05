@@ -87,6 +87,39 @@ struct AccountScopedTests {
     }
 
     @Test
+    func `a fetch cancellation stops before later accounts`() async {
+        var fetchCount = 0
+
+        await #expect(throws: CancellationError.self) {
+            _ = try await MergedLoader.firstPages(accounts: [Account(), Account()]) { _ -> [Item] in
+                fetchCount += 1
+                throw CancellationError()
+            }
+        }
+        #expect(fetchCount == 1)
+    }
+
+    @Test
+    func `task cancellation between accounts cannot return partial results`() async {
+        let fetchCounter = FetchCounter()
+        let task = Task {
+            try await MergedLoader.firstPages(accounts: [Account(), Account()]) { _ -> [Item] in
+                let fetchNumber = await fetchCounter.increment()
+                if fetchNumber == 1 {
+                    withUnsafeCurrentTask { $0?.cancel() }
+                }
+                return [Item(id: "partial")]
+            }
+        }
+
+        await #expect(throws: CancellationError.self) {
+            _ = try await task.value
+        }
+        let fetchCount = await fetchCounter.value
+        #expect(fetchCount == 1)
+    }
+
+    @Test
     func `it throws only when every account fails`() async {
         await #expect(throws: Boom.self) {
             _ = try await MergedLoader.firstPages(accounts: [Account(), Account()]) { _ -> [Item] in
@@ -108,5 +141,14 @@ struct AccountScopedTests {
         }
         #expect(merged.count == 2)
         #expect(Set(merged.map(\.id)).count == 2)
+    }
+}
+
+private actor FetchCounter {
+    private(set) var value = 0
+
+    func increment() -> Int {
+        value += 1
+        return value
     }
 }
