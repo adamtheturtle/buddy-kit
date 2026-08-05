@@ -50,6 +50,14 @@ public nonisolated struct DiskCache: Sendable {
         } catch {
             let reason = error.localizedDescription
             logger.error("Failed to decode \(kind, privacy: .public) cache: \(reason, privacy: .public)")
+            do {
+                try FileManager.default.removeItem(at: url)
+            } catch {
+                let removalReason = error.localizedDescription
+                logger.error(
+                    "Failed to remove corrupt \(kind, privacy: .public) cache: \(removalReason, privacy: .public)"
+                )
+            }
             return nil
         }
     }
