@@ -22,8 +22,8 @@ public nonisolated struct DiskCache: Sendable {
     /// These were built inside `load` and `save`, so a consumer reading and writing
     /// per account and per kind allocated a fresh coder every time — including on the
     /// cold-launch path, where snapshots for every account are merged before first
-    /// paint (#13). Both are `Sendable` and configured with default strategies, so a
-    /// shared instance behaves identically to a fresh one.
+    /// paint (#13). Foundation coders retain mutable state, so every access is guarded
+    /// by `operationLock`; the pair is never entered concurrently.
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
     /// Keeps reads, writes, deletes, and corrupt-file cleanup on this cache instance
