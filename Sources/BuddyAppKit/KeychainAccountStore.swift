@@ -153,6 +153,7 @@ public final class KeychainAccountStore<Account: StorableAccount> {
 
     @ObservationIgnored private let config: Config
     @ObservationIgnored private let writeQueue = SerialWriteQueue()
+    @ObservationIgnored private var persistenceResults = PersistenceResultState()
 
     public init(config: Config) {
         self.config = config
@@ -220,6 +221,7 @@ public final class KeychainAccountStore<Account: StorableAccount> {
 
         let keychain = config.keychain
         let key = config.accountsKey
+        let generation = persistenceResults.schedule()
         // Encode on the main actor (where the account model's Codable conformance lives),
         // then hand only the resulting `Data` to the background write — so the account
         // model never has to cross actors. Writes stay ordered via the queue so a slower
@@ -228,15 +230,16 @@ public final class KeychainAccountStore<Account: StorableAccount> {
             writeQueue.enqueue(priority: .userInitiated) { [weak self] in
                 let succeeded = keychain.delete(account: key)
                 Task { @MainActor in
-                    self?.persistenceFailed = !succeeded
-                    self?.config.onPersistenceResult(succeeded)
+                    self?.applyPersistenceResult(succeeded, generation: generation)
                 }
             }
             return
         }
         guard let data = config.encode(accounts) else {
             config.logger.error("Failed to encode accounts snapshot")
-            persistenceFailed = true
+            if persistenceResults.apply(succeeded: false, generation: generation) {
+                persistenceFailed = persistenceResults.failed
+            }
             return
         }
 
@@ -246,10 +249,16 @@ public final class KeychainAccountStore<Account: StorableAccount> {
             // the UI just accepted will revert on relaunch, which the store must
             // not keep to itself.
             Task { @MainActor in
-                self?.persistenceFailed = !succeeded
-                self?.config.onPersistenceResult(succeeded)
+                self?.applyPersistenceResult(succeeded, generation: generation)
             }
         }
+    }
+
+    private func applyPersistenceResult(_ succeeded: Bool, generation: UInt64) {
+        guard persistenceResults.apply(succeeded: succeeded, generation: generation) else { return }
+
+        persistenceFailed = persistenceResults.failed
+        config.onPersistenceResult(succeeded)
     }
 
     /// Re-enqueues the current in-memory accounts snapshot after a failed write.
@@ -273,5 +282,22 @@ public final class KeychainAccountStore<Account: StorableAccount> {
         guard !config.isTestingMode else { return }
 
         UserDefaults.standard.set(showAllAccounts, forKey: config.showAllAccountsDefaultsKey)
+    }
+}
+
+nonisolated struct PersistenceResultState: Sendable {
+    private var currentGeneration: UInt64 = 0
+    private(set) var failed = false
+
+    mutating func schedule() -> UInt64 {
+        currentGeneration &+= 1
+        return currentGeneration
+    }
+
+    @discardableResult
+    mutating func apply(succeeded: Bool, generation: UInt64) -> Bool {
+        guard generation == currentGeneration else { return false }
+        failed = !succeeded
+        return true
     }
 }
