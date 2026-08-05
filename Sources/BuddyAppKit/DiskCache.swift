@@ -42,10 +42,16 @@ public nonisolated struct DiskCache: Sendable {
     private func url(kind: String, account: UUID) -> URL? {
         guard let base = FileManager.default.urls(for: .applicationSupportDirectory,
                                                   in: .userDomainMask).first else { return nil }
-
-        let dir = base.appending(path: directoryName, directoryHint: .isDirectory)
+        guard let dir = DiskCachePathPolicy.directoryURL(
+            root: base, relativePath: directoryName
+        ), let snapshot = DiskCachePathPolicy.snapshotURL(
+            directory: dir, root: base, kind: kind, account: account
+        ) else {
+            logger.error("Rejecting unsafe DiskCache path")
+            return nil
+        }
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir.appending(path: "\(kind)-\(account.uuidString).json")
+        return snapshot
     }
 
     public func load<T: Decodable>(_: T.Type, kind: String, account: UUID) -> T? {
@@ -135,5 +141,43 @@ public nonisolated struct DiskCache: Sendable {
               let attributes = try? FileManager.default.attributesOfItem(atPath: url.path) else { return nil }
 
         return attributes[.modificationDate] as? Date
+    }
+}
+
+nonisolated enum DiskCachePathPolicy {
+    static func directoryURL(root: URL, relativePath: String) -> URL? {
+        guard !relativePath.hasPrefix("/") else { return nil }
+        let components = relativePath.split(
+            separator: "/", omittingEmptySubsequences: false
+        ).map(String.init)
+        guard !components.isEmpty, components.allSatisfy(isValidComponent) else { return nil }
+
+        let directory = components.reduce(root) { partial, component in
+            partial.appending(path: component, directoryHint: .isDirectory)
+        }.standardizedFileURL
+        return isStrictDescendant(directory, of: root) ? directory : nil
+    }
+
+    static func snapshotURL(directory: URL, root: URL, kind: String, account: UUID) -> URL? {
+        guard isValidComponent(kind) else { return nil }
+        let snapshot = directory
+            .appending(path: "\(kind)-\(account.uuidString).json")
+            .standardizedFileURL
+        return isStrictDescendant(snapshot, of: root) ? snapshot : nil
+    }
+
+    private static func isValidComponent(_ component: String) -> Bool {
+        !component.isEmpty
+            && component != "."
+            && component != ".."
+            && !component.contains("/")
+            && !component.contains("\\")
+            && !component.contains("\0")
+    }
+
+    private static func isStrictDescendant(_ candidate: URL, of root: URL) -> Bool {
+        let rootPath = root.standardizedFileURL.path
+        let candidatePath = candidate.standardizedFileURL.path
+        return candidatePath.hasPrefix(rootPath + "/")
     }
 }

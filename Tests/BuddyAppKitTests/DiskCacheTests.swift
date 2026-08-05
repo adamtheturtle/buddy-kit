@@ -28,6 +28,28 @@ struct DiskCacheTests {
                   logger: Logger(subsystem: "BuddyAppKitTests", category: "disk-cache"))
     }
 
+    @Test func `cache paths reject traversal absolute and separator inputs`() throws {
+        let root = URL(fileURLWithPath: "/tmp/BuddyAppKitTests/Application Support", isDirectory: true)
+        let account = UUID()
+
+        for unsafeDirectory in ["../outside", "/tmp/outside", "safe//outside", "safe\\outside"] {
+            #expect(DiskCachePathPolicy.directoryURL(
+                root: root, relativePath: unsafeDirectory
+            ) == nil)
+        }
+        let directory = try #require(DiskCachePathPolicy.directoryURL(
+            root: root, relativePath: "com.example.app/DataCache"
+        ))
+        for unsafeKind in ["../pads", "/pads", "nested/pads", "nested\\pads", ".", ".."] {
+            #expect(DiskCachePathPolicy.snapshotURL(
+                directory: directory, root: root, kind: unsafeKind, account: account
+            ) == nil)
+        }
+        #expect(DiskCachePathPolicy.snapshotURL(
+            directory: directory, root: root, kind: "pads", account: account
+        ) != nil)
+    }
+
     @Test func `a saved value round-trips`() {
         let cache = makeCache()
         let account = UUID()
