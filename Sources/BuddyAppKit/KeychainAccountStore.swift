@@ -102,6 +102,11 @@ public final class KeychainAccountStore<Account: StorableAccount> {
 
     public var accounts: [Account] {
         didSet {
+            let repaired = Self.repairDuplicateAccountIDs(accounts)
+            if repaired.count != accounts.count {
+                accounts = repaired
+                return
+            }
             persistAccounts()
             // Pass `accounts` directly — never the shared singleton — since the
             // Observation macro fires this observer during init too, where reaching back
@@ -158,11 +163,13 @@ public final class KeychainAccountStore<Account: StorableAccount> {
     public init(config: Config) {
         self.config = config
         if config.isTestingMode {
-            accounts = config.seedForTesting()
+            accounts = Self.repairDuplicateAccountIDs(config.seedForTesting())
             currentAccountID = accounts.first?.accountID
             return
         }
-        let loaded = Self.loadAccounts(config: config) ?? []
+        let stored = Self.loadAccounts(config: config) ?? []
+        let loaded = Self.repairDuplicateAccountIDs(stored)
+        var shouldPersistRepair = loaded.count != stored.count
         accounts = loaded
         if let stored = UserDefaults.standard.string(forKey: config.currentIDDefaultsKey),
            let uuid = UUID(uuidString: stored),
@@ -173,15 +180,26 @@ public final class KeychainAccountStore<Account: StorableAccount> {
         }
 
         if loaded.isEmpty, let migrated = config.migrateIfEmpty(), !migrated.isEmpty {
-            accounts = migrated
-            currentAccountID = migrated.first?.accountID
+            let repairedMigration = Self.repairDuplicateAccountIDs(migrated)
+            accounts = repairedMigration
+            currentAccountID = repairedMigration.first?.accountID
+            shouldPersistRepair = shouldPersistRepair || repairedMigration.count != migrated.count
         }
         showAllAccounts = UserDefaults.standard.bool(forKey: config.showAllAccountsDefaultsKey)
+        if shouldPersistRepair {
+            persistAccounts()
+        }
     }
 
-    public func add(_ account: Account) {
+    /// Adds an account unless its ID already exists. Duplicate IDs are rejected so all
+    /// selection, update, removal, and callback operations remain one-to-one.
+    @discardableResult
+    public func add(_ account: Account) -> Bool {
+        guard !accounts.contains(where: { $0.accountID == account.accountID }) else { return false }
+
         accounts.append(account)
         if currentAccountID == nil { currentAccountID = account.accountID }
+        return true
     }
 
     public func update(_ account: Account) {
@@ -214,6 +232,13 @@ public final class KeychainAccountStore<Account: StorableAccount> {
         guard let data = config.keychain.readData(account: config.accountsKey) else { return nil }
 
         return config.decode(data)
+    }
+
+    /// Keeps the last snapshot for each ID and preserves the relative order of those
+    /// winners, repairing historical duplicate arrays deterministically.
+    static func repairDuplicateAccountIDs(_ accounts: [Account]) -> [Account] {
+        var seen: Set<UUID> = []
+        return Array(accounts.reversed().filter { seen.insert($0.accountID).inserted }.reversed())
     }
 
     private func persistAccounts() {

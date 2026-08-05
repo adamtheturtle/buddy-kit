@@ -93,6 +93,38 @@ struct KeychainAccountStoreTests {
     }
 
     @Test
+    func `add rejects a duplicate account id`() {
+        let id = UUID()
+        let original = MockAccount(accountID: id, key: "original")
+        let duplicate = MockAccount(accountID: id, key: "duplicate")
+        let store = makeStore(seed: [original])
+
+        #expect(!store.add(duplicate))
+        #expect(store.accounts == [original])
+    }
+
+    @Test
+    func `loaded duplicate ids keep the last snapshot and remain one-to-one`() {
+        let duplicateID = UUID()
+        let survivor = MockAccount(accountID: UUID(), key: "survivor")
+        let repaired = KeychainAccountStore<MockAccount>.repairDuplicateAccountIDs([
+            MockAccount(accountID: duplicateID, key: "old"),
+            survivor,
+            MockAccount(accountID: duplicateID, key: "new")
+        ])
+
+        #expect(repaired == [survivor, MockAccount(accountID: duplicateID, key: "new")])
+
+        let store = makeStore(seed: repaired)
+        store.update(MockAccount(accountID: duplicateID, key: "updated"))
+        #expect(store.accounts.count(where: { $0.accountID == duplicateID }) == 1)
+        #expect(store.accounts.last?.key == "updated")
+
+        store.remove(id: duplicateID)
+        #expect(store.accounts == [survivor])
+    }
+
+    @Test
     func `update fires onRekeyed only when the backend changes`() {
         let id = UUID()
         var rekeyed: [MockAccount] = []
