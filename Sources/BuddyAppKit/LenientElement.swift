@@ -16,9 +16,41 @@ import Foundation
 /// `Wrapped?`, so it stays trivially `Sendable` whenever `Wrapped` is (the conditional
 /// `Sendable` the compiler would synthesize is unaffected by the isolation change).
 public nonisolated struct LenientElement<Wrapped: Decodable>: Decodable {
+    /// Distinguishes a successfully decoded value from an explicit JSON null and
+    /// from a present value whose shape no longer matches `Wrapped`.
+    public enum DecodingState: Sendable, Equatable {
+        case value
+        case null
+        case malformed
+    }
+
     public let value: Wrapped?
+    public let decodingState: DecodingState
+
+    public var isMalformed: Bool {
+        decodingState == .malformed
+    }
 
     public init(from decoder: any Decoder) {
-        value = try? decoder.singleValueContainer().decode(Wrapped.self)
+        do {
+            let container = try decoder.singleValueContainer()
+            if container.decodeNil() {
+                // Decode through `Wrapped` even for null so an optional Wrapped
+                // preserves the outer "element was present" optional layer.
+                value = try? container.decode(Wrapped.self)
+                decodingState = .null
+            } else {
+                do {
+                    value = try container.decode(Wrapped.self)
+                    decodingState = .value
+                } catch {
+                    value = nil
+                    decodingState = .malformed
+                }
+            }
+        } catch {
+            value = nil
+            decodingState = .malformed
+        }
     }
 }
