@@ -69,15 +69,19 @@ public enum MergedLoader {
         var anySuccess = false
 
         for account in accounts {
+            try Task.checkCancellation()
             do {
                 let items = try await fetch(account)
                 anySuccess = true
                 scoped += items.map { AccountScoped(account: account, item: $0) }
             } catch {
+                if error is CancellationError { throw error }
+                try Task.checkCancellation()
                 if firstError == nil { firstError = error }
             }
         }
 
+        try Task.checkCancellation()
         if !anySuccess, let firstError {
             throw firstError
         }
