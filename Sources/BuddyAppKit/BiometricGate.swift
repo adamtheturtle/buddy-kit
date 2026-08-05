@@ -18,11 +18,38 @@
 /// Biometric / device-owner authentication gate for revealing a stored secret or
 /// guarding a destructive toggle.
 public enum BiometricGate {
-    /// Whether a reveal should be challenged at all: only when the user enabled the
-    /// opt-in *and* the device actually has biometrics enrolled. Pure, so it's
-    /// unit-testable.
-    public nonisolated static func shouldPrompt(settingEnabled: Bool, biometricsAvailable: Bool) -> Bool {
-        settingEnabled && biometricsAvailable
+    public nonisolated enum BiometricUnavailabilityReason: Sendable, Equatable {
+        case notEnrolled
+        case lockout
+        case unavailable
+    }
+
+    public nonisolated enum RevealAuthenticationPlan: Sendable, Equatable {
+        case notRequired
+        case biometrics
+        case ownerAuthentication(BiometricUnavailabilityReason)
+        case unavailable(BiometricUnavailabilityReason)
+    }
+
+    /// Once protection is enabled, a reveal always requires authentication; losing
+    /// biometric availability must not silently disable the gate.
+    public nonisolated static func shouldPrompt(
+        settingEnabled: Bool,
+        biometricsAvailable _: Bool
+    ) -> Bool {
+        settingEnabled
+    }
+
+    public nonisolated static func revealAuthenticationPlan(
+        settingEnabled: Bool,
+        biometricsAvailable: Bool,
+        ownerAuthenticationAvailable: Bool,
+        biometricFailure: BiometricUnavailabilityReason
+    ) -> RevealAuthenticationPlan {
+        guard settingEnabled else { return .notRequired }
+        if biometricsAvailable { return .biometrics }
+        if ownerAuthenticationAvailable { return .ownerAuthentication(biometricFailure) }
+        return .unavailable(biometricFailure)
     }
 
     /// Whether this device can evaluate biometrics (Touch ID / Face ID) right now.
@@ -44,10 +71,9 @@ public enum BiometricGate {
         #endif
     }
 
-    /// Authenticate before revealing a secret. Returns `true` immediately when no prompt
-    /// is needed (the opt-in is off, or the device has no enrolled biometrics), otherwise
-    /// the result of the biometric prompt. A failed or cancelled prompt returns `false`,
-    /// so the caller leaves the secret hidden.
+    /// Authenticate before revealing a secret. Returns `true` immediately only when the
+    /// opt-in is off. If biometrics are unavailable, device-owner authentication is used
+    /// as a fallback; if neither policy can run, the gate fails closed.
     ///
     /// - Parameters:
     ///   - settingEnabled: the app's stored opt-in (read from its own `@AppStorage` key).
@@ -55,18 +81,57 @@ public enum BiometricGate {
     @MainActor
     public static func authenticateForReveal(settingEnabled: Bool, reason: String) async -> Bool {
         #if os(tvOS)
-            true
+            !settingEnabled
         #else
-        guard shouldPrompt(settingEnabled: settingEnabled, biometricsAvailable: isBiometricsAvailable) else {
-            return true
-        }
+        guard settingEnabled else { return true }
 
         let context = LAContext()
-        return await (try? context.evaluatePolicy(
-            .deviceOwnerAuthenticationWithBiometrics, localizedReason: reason
-        )) ?? false
+        var biometricError: NSError?
+        let biometricsAvailable = context.canEvaluatePolicy(
+            .deviceOwnerAuthenticationWithBiometrics,
+            error: &biometricError
+        )
+        let biometricFailure = biometricUnavailabilityReason(for: biometricError)
+        let ownerAuthenticationAvailable = context.canEvaluatePolicy(.deviceOwnerAuthentication, error: nil)
+        let plan = revealAuthenticationPlan(
+            settingEnabled: true,
+            biometricsAvailable: biometricsAvailable,
+            ownerAuthenticationAvailable: ownerAuthenticationAvailable,
+            biometricFailure: biometricFailure
+        )
+
+        let policy: LAPolicy
+        switch plan {
+        case .notRequired:
+            return true
+        case .biometrics:
+            policy = .deviceOwnerAuthenticationWithBiometrics
+        case .ownerAuthentication:
+            policy = .deviceOwnerAuthentication
+        case .unavailable:
+            return false
+        }
+
+        return await (try? context.evaluatePolicy(policy, localizedReason: reason)) ?? false
         #endif
     }
+
+    #if !os(tvOS)
+        private nonisolated static func biometricUnavailabilityReason(
+            for error: NSError?
+        ) -> BiometricUnavailabilityReason {
+            guard let error, error.domain == LAError.errorDomain else { return .unavailable }
+
+            switch LAError.Code(rawValue: error.code) {
+            case .biometryNotEnrolled:
+                return .notEnrolled
+            case .biometryLockout:
+                return .lockout
+            default:
+                return .unavailable
+            }
+        }
+    #endif
 
     /// Authenticate before *disabling* a reveal gate (or performing any change that
     /// removes protection). Uses `.deviceOwnerAuthentication` so a password / passcode
