@@ -11,6 +11,7 @@
 @testable import BuddyAppKit
 import Foundation
 import os
+import Security
 import Testing
 
 private struct MockAccount: StorableAccount, Equatable {
@@ -51,6 +52,60 @@ private func makeStore(
 @Suite("KeychainAccountStore in-memory logic")
 @MainActor
 struct KeychainAccountStoreTests {
+    @Test
+    nonisolated func `keychain statuses distinguish absence from read failures`() {
+        let data = Data([1, 2, 3])
+
+        #expect(KeychainReadResult.classify(status: errSecSuccess, data: data) == .value(data))
+        #expect(KeychainReadResult.classify(status: errSecSuccess, data: nil) == .failure(errSecDecode))
+        #expect(KeychainReadResult.classify(status: errSecItemNotFound, data: nil) == .notFound)
+        #expect(KeychainReadResult.classify(
+            status: errSecInteractionNotAllowed, data: nil
+        ) == .failure(errSecInteractionNotAllowed))
+        #expect(KeychainReadResult.classify(
+            status: errSecMissingEntitlement, data: nil
+        ) == .failure(errSecMissingEntitlement))
+        #expect(KeychainReadResult.notFound.allowsEmptyStoreMigration)
+        #expect(!KeychainReadResult.failure(errSecInteractionNotAllowed).allowsEmptyStoreMigration)
+    }
+
+    @Test
+    func `startup read failure is surfaced and cannot trigger migration`() {
+        var migrationRan = false
+        var reportedStatus: OSStatus?
+        let unique = UUID().uuidString
+        let config = KeychainAccountStore<MockAccount>.Config(
+            keychain: KeychainStore(
+                service: "test.buddyappkit.unused", logger: Logger(subsystem: "test", category: "x")
+            ),
+            accountsKey: "accounts",
+            currentIDDefaultsKey: "current-\(unique)",
+            showAllAccountsDefaultsKey: "showAll-\(unique)",
+            encode: { _ in nil },
+            decode: { _ in [] },
+            isTestingMode: false,
+            seedForTesting: { [] },
+            migrateIfEmpty: {
+                migrationRan = true
+                return []
+            },
+            onAccountsChanged: { _ in },
+            onCurrentChanged: { _ in },
+            onRemoved: { _ in },
+            onRekeyed: { _ in },
+            logger: Logger(subsystem: "test", category: "x"),
+            readAccounts: { _, _ in .failure(errSecInteractionNotAllowed) },
+            onReadFailure: { reportedStatus = $0 }
+        )
+
+        let store = KeychainAccountStore(config: config)
+
+        #expect(store.accounts.isEmpty)
+        #expect(store.readFailureStatus == errSecInteractionNotAllowed)
+        #expect(reportedStatus == errSecInteractionNotAllowed)
+        #expect(!migrationRan)
+    }
+
     @Test
     nonisolated func `older persistence completions cannot replace the latest result`() {
         var results = PersistenceResultState()
