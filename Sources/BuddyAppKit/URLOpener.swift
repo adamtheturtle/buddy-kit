@@ -20,15 +20,19 @@
 public enum URLOpener {
     /// Open `url` through the system. External links launch the user's default
     /// handler; the app's own URL scheme routes back through LaunchServices to
-    /// deliver the deep link (and surface a window when none is open).
-    public static func open(_ url: URL) {
+    /// deliver the deep link (and surface a window when none is open). Returns
+    /// whether the platform accepted the request.
+    @discardableResult
+    public static func open(_ url: URL) async -> Bool {
         #if os(macOS)
-            NSWorkspace.shared.open(url)
+            return NSWorkspace.shared.open(url)
         #else
-            // `UIApplication.shared.open` is MainActor-isolated and async; hop onto
-            // the main actor so the synchronous macOS signature stays unchanged.
-            Task { @MainActor in UIApplication.shared.open(url) }
+            return await UIApplication.shared.open(url)
         #endif
+    }
+
+    static func open(_ url: URL, using platformOpen: (URL) async -> Bool) async -> Bool {
+        await platformOpen(url)
     }
 }
 
