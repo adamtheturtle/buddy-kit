@@ -34,6 +34,8 @@ public final class CloudSyncStore {
     /// Held so the external-change observation task isn't cancelled; the store is a
     /// singleton that lives for the whole process, so it's never explicitly stopped.
     private var observerTask: Task<Void, Never>?
+    private var identityObserverTask: Task<Void, Never>?
+    private var activationState = CloudSyncActivationState()
 
     private init() {}
 
@@ -69,10 +71,24 @@ public final class CloudSyncStore {
         Self.hasUbiquityEntitlement && FileManager.default.ubiquityIdentityToken != nil
     }
 
-    /// Begins observing external iCloud changes and pulls the current cloud state.
-    /// Idempotent; a no-op when iCloud is unavailable.
+    /// Begins observing iCloud availability and external changes. Idempotent; if the
+    /// user signs in after launch, the store activates as soon as that identity-change
+    /// notification arrives.
     public func start() {
-        guard isAvailable, observerTask == nil else { return }
+        guard identityObserverTask == nil else { return }
+
+        identityObserverTask = Task { @MainActor [weak self] in
+            for await _ in NotificationCenter.default.notifications(
+                named: Notification.Name.NSUbiquityIdentityDidChange
+            ) {
+                self?.activateIfAvailable()
+            }
+        }
+        activateIfAvailable()
+    }
+
+    private func activateIfAvailable() {
+        guard activationState.consumeAvailability(isAvailable) else { return }
 
         // No object filter: the default KVS is the only poster of this notification, so
         // the name alone is exact — and the async sequence's `object:` wants a Sendable,
@@ -128,5 +144,17 @@ public final class CloudSyncStore {
                 name: Self.didChangeExternally, object: nil, userInfo: ["key": key]
             )
         }
+    }
+}
+
+/// Tracks the one-way unavailable-to-available startup transition without touching
+/// iCloud, keeping lifecycle behavior deterministic and independently testable.
+nonisolated struct CloudSyncActivationState: Sendable {
+    private(set) var hasActivated = false
+
+    mutating func consumeAvailability(_ isAvailable: Bool) -> Bool {
+        guard isAvailable, !hasActivated else { return false }
+        hasActivated = true
+        return true
     }
 }
