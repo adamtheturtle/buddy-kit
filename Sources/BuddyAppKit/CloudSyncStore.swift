@@ -19,6 +19,7 @@
 //
 
 import Foundation
+import os
 import Security
 
 /// A thin, best-effort mirror of small per-account collections into iCloud's
@@ -37,8 +38,18 @@ public final class CloudSyncStore {
     private var activationState = CloudSyncActivationState()
     private var observationState = CloudSyncObservationState()
     private var configuredUbiquityEntitlement = false
+    private var dataByteLimit = 1_000_000
+    private let logger = Logger(subsystem: "BuddyAppKit", category: "CloudSyncStore")
 
     private init() {}
+
+    /// The largest `Data` value returned by ``data(forKey:)``. Values above this cap
+    /// are treated as unavailable and logged instead of being handed to a decoder.
+    /// The default matches iCloud KVS's documented total-store byte quota.
+    public var maximumDataBytes: Int {
+        get { dataByteLimit }
+        set { dataByteLimit = max(0, newValue) }
+    }
 
     /// The shared iCloud KVS, accessed lazily and ONLY behind ``isAvailable`` — merely
     /// referencing `NSUbiquitousKeyValueStore.default` without the ubiquity entitlement
@@ -152,7 +163,14 @@ public final class CloudSyncStore {
     public func data(forKey key: String) -> Data? {
         guard isAvailable else { return nil }
 
-        return store.data(forKey: key)
+        guard let data = store.data(forKey: key) else { return nil }
+        guard CloudSyncDataSizePolicy.isWithinLimit(data, maximumBytes: dataByteLimit) else {
+            logger.error(
+                "Ignoring oversized iCloud data for key \(key, privacy: .public): \(data.count) bytes exceeds \(self.dataByteLimit)"
+            )
+            return nil
+        }
+        return data
     }
 
     /// Mirrors a plist-type preference value (`String`/`Int`/`Bool`/`Data`/…) to iCloud,
@@ -228,5 +246,11 @@ nonisolated struct CloudSyncObservationState: Sendable {
 nonisolated enum CloudSyncEntitlementGate {
     static func allowsStore(runtimeDetected: Bool?, hostConfigured: Bool) -> Bool {
         runtimeDetected ?? hostConfigured
+    }
+}
+
+nonisolated enum CloudSyncDataSizePolicy {
+    static func isWithinLimit(_ data: Data, maximumBytes: Int) -> Bool {
+        maximumBytes >= 0 && data.count <= maximumBytes
     }
 }
