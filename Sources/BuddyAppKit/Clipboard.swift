@@ -99,9 +99,13 @@ public enum Clipboard {
 
     private static func replacePlainText(_ text: String) -> Int? {
         #if os(macOS)
-            NSPasteboard.general.clearContents()
-            guard NSPasteboard.general.setString(text, forType: .string) else { return nil }
-            return NSPasteboard.general.changeCount
+            let item = NSPasteboardItem()
+            guard item.setString(text, forType: .string) else { return nil }
+
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            guard pasteboard.writeObjects([item]) else { return nil }
+            return pasteboard.changeCount
         #elseif !os(tvOS)
             UIPasteboard.general.string = text
             return UIPasteboard.general.changeCount
