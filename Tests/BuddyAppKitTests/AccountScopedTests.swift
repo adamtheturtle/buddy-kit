@@ -22,6 +22,10 @@ struct AccountScopedTests {
         let id: String
     }
 
+    private struct StringAccount: Identifiable {
+        let id: String
+    }
+
     private struct Boom: Error {}
 
     // MARK: - AccountScoped id
@@ -32,8 +36,22 @@ struct AccountScopedTests {
         let accB = Account()
         let rowA = AccountScoped(account: accA, item: Item(id: "dup"))
         let rowB = AccountScoped(account: accB, item: Item(id: "dup"))
-        #expect(rowA.id == "\(accA.id)|dup")
+        #expect(rowA.id == "36:\(accA.id)3:dup")
         #expect(rowA.id != rowB.id)
+    }
+
+    @Test
+    func `derived ids cannot collide when components contain delimiters`() {
+        let accountContainsDelimiter = AccountScoped(
+            account: StringAccount(id: "a|b"), item: Item(id: "c")
+        )
+        let itemContainsDelimiter = AccountScoped(
+            account: StringAccount(id: "a"), item: Item(id: "b|c")
+        )
+
+        #expect(accountContainsDelimiter.id == "3:a|b1:c")
+        #expect(itemContainsDelimiter.id == "1:a3:b|c")
+        #expect(accountContainsDelimiter.id != itemContainsDelimiter.id)
     }
 
     @Test
