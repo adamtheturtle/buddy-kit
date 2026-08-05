@@ -237,8 +237,9 @@ public final class KeychainAccountStore<Account: StorableAccount> {
         }
         guard let data = config.encode(accounts) else {
             config.logger.error("Failed to encode accounts snapshot")
-            _ = persistenceResults.apply(succeeded: false, generation: generation)
-            persistenceFailed = true
+            if persistenceResults.apply(succeeded: false, generation: generation) {
+                persistenceFailed = persistenceResults.failed
+            }
             return
         }
 
