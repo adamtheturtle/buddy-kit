@@ -35,7 +35,9 @@ public nonisolated struct LenientElement<Wrapped: Decodable>: Decodable {
         do {
             let container = try decoder.singleValueContainer()
             if container.decodeNil() {
-                value = nil
+                // Decode through `Wrapped` even for null so an optional Wrapped
+                // preserves the outer "element was present" optional layer.
+                value = try? container.decode(Wrapped.self)
                 decodingState = .null
             } else {
                 do {

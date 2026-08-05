@@ -40,6 +40,15 @@ struct BuddyAppKitTests {
         #expect(null.decodingState == .null)
         #expect(!null.isMalformed)
 
+        let optionalNull = try JSONDecoder().decode(LenientElement<Int?>.self, from: Data("null".utf8))
+        let preservesPresentElement: Bool
+        switch optionalNull.value {
+        case .some(.none): preservesPresentElement = true
+        default: preservesPresentElement = false
+        }
+        #expect(preservesPresentElement)
+        #expect(optionalNull.decodingState == .null)
+
         let bad = try JSONDecoder().decode(LenientElement<Int>.self, from: Data("\"nope\"".utf8))
         #expect(bad.value == nil)
         #expect(bad.decodingState == .malformed)
