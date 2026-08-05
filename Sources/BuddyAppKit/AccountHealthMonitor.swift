@@ -29,8 +29,8 @@ public final class AccountHealthMonitor<AccountID: Hashable & Sendable> {
     /// can show the unauthorized banner for exactly these.
     public private(set) var unauthorizedAccountIDs: Set<AccountID> = []
 
-    /// When the last check completed, or nil if none has. Additive; the banner doesn't need
-    /// it, but a "last checked" affordance can read it.
+    /// When the newest applicable check completed, or nil if none has. A stale completion
+    /// from an older overlapping check does not change this timestamp.
     public private(set) var lastChecked: Date?
 
     /// The account to probe on each tick, evaluated fresh each time so switching the current
@@ -42,6 +42,7 @@ public final class AccountHealthMonitor<AccountID: Hashable & Sendable> {
     /// Whether a thrown error means the token was rejected (as opposed to a transient blip).
     @ObservationIgnored private let isUnauthorized: (any Error) -> Bool
     @ObservationIgnored private var loop: Task<Void, Never>?
+    @ObservationIgnored private var checkGenerations: [AccountID: UInt64] = [:]
 
     /// - Parameters:
     ///   - accountToCheck: The account id to probe this tick, or nil to skip.
@@ -92,15 +93,29 @@ public final class AccountHealthMonitor<AccountID: Hashable & Sendable> {
     /// blip doesn't wrongly claim the key is bad.
     public func check() async {
         guard let account = accountToCheck() else { return }
+        let generation = (checkGenerations[account] ?? 0) &+ 1
+        checkGenerations[account] = generation
+
+        let outcome: CheckOutcome
 
         do {
             try await probe(account)
-            unauthorizedAccountIDs.remove(account)
+            outcome = .authorized
+        } catch where isUnauthorized(error) {
+            outcome = .unauthorized
         } catch {
-            if isUnauthorized(error) {
-                unauthorizedAccountIDs.insert(account)
-            }
-            // Transient — keep the previous verdict.
+            outcome = .transient
+        }
+
+        guard checkGenerations[account] == generation else { return }
+
+        switch outcome {
+        case .authorized:
+            unauthorizedAccountIDs.remove(account)
+        case .unauthorized:
+            unauthorizedAccountIDs.insert(account)
+        case .transient:
+            break
         }
         lastChecked = Date()
     }
@@ -114,6 +129,13 @@ public final class AccountHealthMonitor<AccountID: Hashable & Sendable> {
     /// check re-flags it if the new token is also bad, but until then the banner shouldn't
     /// claim the new key is already bad.
     public func clearUnauthorized(_ accountID: AccountID) {
+        checkGenerations[accountID] = (checkGenerations[accountID] ?? 0) &+ 1
         unauthorizedAccountIDs.remove(accountID)
+    }
+
+    private enum CheckOutcome {
+        case authorized
+        case unauthorized
+        case transient
     }
 }
