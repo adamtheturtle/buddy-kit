@@ -10,6 +10,32 @@
 
 import Foundation
 import Network
+import Synchronization
+
+nonisolated final class NetworkStatusCoalescer: Sendable {
+    private struct State: Sendable {
+        var generation: UInt64 = 0
+        var isOffline = false
+    }
+
+    private let state = Mutex(State())
+
+    func enqueue(isOffline: Bool) -> UInt64 {
+        state.withLock { state in
+            state.generation &+= 1
+            state.isOffline = isOffline
+            return state.generation
+        }
+    }
+
+    func value(ifCurrent generation: UInt64) -> Bool? {
+        state.withLock { state in
+            guard state.generation == generation else { return nil }
+
+            return state.isOffline
+        }
+    }
+}
 
 @Observable
 public final class NetworkMonitor {
@@ -22,6 +48,7 @@ public final class NetworkMonitor {
 
     @ObservationIgnored private let monitor = NWPathMonitor()
     @ObservationIgnored private let queue = DispatchQueue(label: "com.adamdangoor.buddyappkit.network-monitor")
+    @ObservationIgnored private let statusCoalescer = NetworkStatusCoalescer()
     @ObservationIgnored private var started = false
 
     private init() {}
@@ -34,10 +61,13 @@ public final class NetworkMonitor {
         guard !started else { return }
 
         started = true
-        monitor.pathUpdateHandler = { [weak self] path in
-            let offline = path.status != .satisfied
+        let statusCoalescer = statusCoalescer
+        monitor.pathUpdateHandler = { [weak self, statusCoalescer] path in
+            let generation = statusCoalescer.enqueue(isOffline: path.status != .satisfied)
             Task { @MainActor in
-                guard let self, self.isOffline != offline else { return }
+                guard let self,
+                      let offline = statusCoalescer.value(ifCurrent: generation),
+                      self.isOffline != offline else { return }
 
                 self.isOffline = offline
             }
