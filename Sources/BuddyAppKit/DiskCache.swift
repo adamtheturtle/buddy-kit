@@ -32,6 +32,8 @@ public nonisolated struct DiskCache: Sendable {
     /// Keeps reads, writes, deletes, and corrupt-file cleanup on this cache instance
     /// atomic relative to one another, so cleanup can never remove a newer save.
     private let operationLock = NSLock()
+    /// Coordinates the same snapshot across separately constructed cache instances.
+    private static let pathLocks = DiskCachePathLocks()
 
     public init(directoryName: String, logger: Logger, maximumSnapshotBytes: Int = 10_000_000) {
         self.directoryName = directoryName
@@ -58,23 +60,25 @@ public nonisolated struct DiskCache: Sendable {
         operationLock.lock()
         defer { operationLock.unlock() }
 
-        guard let url = url(kind: kind, account: account),
-              let data = readSnapshot(at: url, kind: kind) else { return nil }
+        guard let url = url(kind: kind, account: account) else { return nil }
+        return Self.pathLocks.withLock(for: url) {
+            guard let data = readSnapshot(at: url, kind: kind) else { return nil }
 
-        do {
-            return try decoder.decode(T.self, from: data)
-        } catch {
-            let reason = error.localizedDescription
-            logger.error("Failed to decode \(kind, privacy: .public) cache: \(reason, privacy: .public)")
             do {
-                try FileManager.default.removeItem(at: url)
+                return try decoder.decode(T.self, from: data)
             } catch {
-                let removalReason = error.localizedDescription
-                logger.error(
-                    "Failed to remove corrupt \(kind, privacy: .public) cache: \(removalReason, privacy: .public)"
-                )
+                let reason = error.localizedDescription
+                logger.error("Failed to decode \(kind, privacy: .public) cache: \(reason, privacy: .public)")
+                do {
+                    try FileManager.default.removeItem(at: url)
+                } catch {
+                    let removalReason = error.localizedDescription
+                    logger.error(
+                        "Failed to remove corrupt \(kind, privacy: .public) cache: \(removalReason, privacy: .public)"
+                    )
+                }
+                return nil
             }
-            return nil
         }
     }
 
@@ -112,12 +116,14 @@ public nonisolated struct DiskCache: Sendable {
 
         guard let url = url(kind: kind, account: account) else { return }
 
-        do {
-            let data = try encoder.encode(value)
-            try data.write(to: url, options: .atomic)
-        } catch {
-            let reason = error.localizedDescription
-            logger.error("Failed to write \(kind, privacy: .public) cache: \(reason, privacy: .public)")
+        Self.pathLocks.withLock(for: url) {
+            do {
+                let data = try encoder.encode(value)
+                try data.write(to: url, options: .atomic)
+            } catch {
+                let reason = error.localizedDescription
+                logger.error("Failed to write \(kind, privacy: .public) cache: \(reason, privacy: .public)")
+            }
         }
     }
 
@@ -127,7 +133,9 @@ public nonisolated struct DiskCache: Sendable {
 
         guard let url = url(kind: kind, account: account) else { return }
 
-        try? FileManager.default.removeItem(at: url)
+        Self.pathLocks.withLock(for: url) {
+            try? FileManager.default.removeItem(at: url)
+        }
     }
 
     /// When the snapshot for `kind`+`account` was last written, or nil if there's no file.
@@ -137,10 +145,27 @@ public nonisolated struct DiskCache: Sendable {
         operationLock.lock()
         defer { operationLock.unlock() }
 
-        guard let url = url(kind: kind, account: account),
-              let attributes = try? FileManager.default.attributesOfItem(atPath: url.path) else { return nil }
+        guard let url = url(kind: kind, account: account) else { return nil }
+        return Self.pathLocks.withLock(for: url) {
+            guard let attributes = try? FileManager.default.attributesOfItem(
+                atPath: url.path
+            ) else { return nil }
+            return attributes[.modificationDate] as? Date
+        }
+    }
+}
 
-        return attributes[.modificationDate] as? Date
+/// A bounded process-wide lock pool. Equal standardized paths always select the same
+/// lock, ordering operations across `DiskCache` values without retaining every key.
+private nonisolated final class DiskCachePathLocks: @unchecked Sendable {
+    private let locks = (0 ..< 64).map { _ in NSLock() }
+
+    func withLock<Result>(for url: URL, _ operation: () throws -> Result) rethrows -> Result {
+        let index = Int(UInt(bitPattern: url.standardizedFileURL.path.hashValue) % UInt(locks.count))
+        let lock = locks[index]
+        lock.lock()
+        defer { lock.unlock() }
+        return try operation()
     }
 }
 

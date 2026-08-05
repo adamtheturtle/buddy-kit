@@ -22,10 +22,28 @@ struct DiskCacheTests {
         let updatedAt: Date
     }
 
+    private nonisolated struct BlockingSnapshot: Encodable, @unchecked Sendable {
+        let encodeStarted: DispatchSemaphore
+        let allowEncode: DispatchSemaphore
+
+        func encode(to encoder: Encoder) throws {
+            encodeStarted.signal()
+            allowEncode.wait()
+            var container = encoder.singleValueContainer()
+            try container.encode(42)
+        }
+    }
+
     /// A cache in its own directory so tests can't collide with each other.
     private func makeCache() -> DiskCache {
         DiskCache(directoryName: "BuddyAppKitTests/\(UUID().uuidString)",
                   logger: Logger(subsystem: "BuddyAppKitTests", category: "disk-cache"))
+    }
+
+    private nonisolated static func blockingWait(
+        _ semaphore: DispatchSemaphore, timeout: DispatchTime
+    ) -> DispatchTimeoutResult {
+        semaphore.wait(timeout: timeout)
     }
 
     @Test func `cache paths reject traversal absolute and separator inputs`() throws {
@@ -95,6 +113,43 @@ struct DiskCacheTests {
         cache.save(Snapshot(id: 1, title: "x", updatedAt: Date()), kind: "pads", account: account)
         cache.delete(kind: "pads", account: account)
         #expect(cache.load(Snapshot.self, kind: "pads", account: account) == nil)
+    }
+
+    @Test func `delete from another cache waits for an in-flight save`() async {
+        let directory = "BuddyAppKitTests/\(UUID().uuidString)"
+        let logger = Logger(subsystem: "BuddyAppKitTests", category: "disk-cache")
+        let savingCache = DiskCache(directoryName: directory, logger: logger)
+        let deletingCache = DiskCache(directoryName: directory, logger: logger)
+        let account = UUID()
+        let encodeStarted = DispatchSemaphore(value: 0)
+        let allowEncode = DispatchSemaphore(value: 0)
+        let deleteFinished = DispatchSemaphore(value: 0)
+
+        let saveTask = Task.detached {
+            savingCache.save(
+                BlockingSnapshot(encodeStarted: encodeStarted, allowEncode: allowEncode),
+                kind: "pads",
+                account: account
+            )
+        }
+        let encodeStartResult = await Task.detached {
+            Self.blockingWait(encodeStarted, timeout: .now() + 2)
+        }.value
+        #expect(encodeStartResult == .success)
+        let deleteTask = Task.detached {
+            deletingCache.delete(kind: "pads", account: account)
+            deleteFinished.signal()
+        }
+
+        let earlyDeleteResult = await Task.detached {
+            Self.blockingWait(deleteFinished, timeout: .now() + 0.1)
+        }.value
+        #expect(earlyDeleteResult == .timedOut)
+        allowEncode.signal()
+        await saveTask.value
+        await deleteTask.value
+
+        #expect(deletingCache.load(Int.self, kind: "pads", account: account) == nil)
     }
 
     @Test func `a corrupt snapshot is removed after its first failed decode`() throws {
