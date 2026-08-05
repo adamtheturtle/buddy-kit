@@ -33,6 +33,10 @@ public nonisolated enum InlineEdit {
 
         return trimmed
     }
+
+    static func editingRemainsAllowed(isEditing: Bool, editingAllowed: Bool) -> Bool {
+        isEditing && editingAllowed
+    }
 }
 
 /// Tracks whether an inline edit already owns the single commit slot. Both Return
@@ -146,7 +150,7 @@ public struct InlineEditableTitle: View {
 
     public var body: some View {
         Group {
-            if isEditing {
+            if InlineEdit.editingRemainsAllowed(isEditing: isEditing, editingAllowed: editingAllowed) {
                 editorField
             } else if editingAllowed {
                 editableTitle
@@ -156,6 +160,9 @@ public struct InlineEditableTitle: View {
         }
         .font(font)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .onChange(of: editingAllowed) { _, allowed in
+            if !allowed { cancelEditing() }
+        }
     }
 
     /// The static title shown in read-only contexts — identical to a plain header.
@@ -251,7 +258,10 @@ public struct InlineEditableTitle: View {
     }
 
     private func requestCommit() {
-        guard isEditing else { return }
+        guard InlineEdit.editingRemainsAllowed(isEditing: isEditing, editingAllowed: editingAllowed) else {
+            cancelEditing()
+            return
+        }
         guard let value = InlineEdit.commitValue(original: title, edited: draft) else {
             // No change (or empty): just leave edit mode without writing.
             isEditing = false
@@ -266,5 +276,10 @@ public struct InlineEditableTitle: View {
             // On failure the host keeps the old title, so reverting is just leaving edit mode.
             _ = succeeded
         }
+    }
+
+    private func cancelEditing() {
+        isEditing = false
+        fieldFocused = false
     }
 }

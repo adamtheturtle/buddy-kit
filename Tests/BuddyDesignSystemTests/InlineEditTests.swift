@@ -49,4 +49,9 @@ struct InlineEditTests {
         let nextEditClaimed = gate.claim()
         #expect(nextEditClaimed)
     }
+
+    @Test nonisolated func `becoming read-only ends editing and blocks commit`() {
+        #expect(InlineEdit.editingRemainsAllowed(isEditing: true, editingAllowed: true))
+        #expect(!InlineEdit.editingRemainsAllowed(isEditing: true, editingAllowed: false))
+    }
 }
