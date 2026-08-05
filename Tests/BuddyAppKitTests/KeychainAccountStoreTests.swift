@@ -25,6 +25,7 @@ private struct MockAccount: StorableAccount, Equatable {
 @MainActor
 private func makeStore(
     seed: [MockAccount],
+    onAccountsChanged: @escaping @MainActor ([MockAccount]) -> Void = { _ in },
     onRemoved: @escaping @MainActor (MockAccount) -> Void = { _ in },
     onRekeyed: @escaping @MainActor (MockAccount) -> Void = { _ in }
 ) -> KeychainAccountStore<MockAccount> {
@@ -38,7 +39,7 @@ private func makeStore(
         isTestingMode: true,
         seedForTesting: { seed },
         migrateIfEmpty: { nil },
-        onAccountsChanged: { _ in },
+        onAccountsChanged: onAccountsChanged,
         onCurrentChanged: { _ in },
         onRemoved: onRemoved,
         onRekeyed: onRekeyed,
@@ -122,6 +123,21 @@ struct KeychainAccountStoreTests {
 
         store.remove(id: duplicateID)
         #expect(store.accounts == [survivor])
+    }
+
+    @Test
+    func `assigning duplicate ids publishes the repaired snapshot`() {
+        let duplicateID = UUID()
+        let old = MockAccount(accountID: duplicateID, key: "old")
+        let new = MockAccount(accountID: duplicateID, key: "new")
+        let survivor = MockAccount(accountID: UUID(), key: "survivor")
+        var published: [[MockAccount]] = []
+        let store = makeStore(seed: [], onAccountsChanged: { published.append($0) })
+
+        store.accounts = [old, survivor, new]
+
+        #expect(store.accounts == [survivor, new])
+        #expect(published.last == [survivor, new])
     }
 
     @Test

@@ -105,7 +105,6 @@ public final class KeychainAccountStore<Account: StorableAccount> {
             let repaired = Self.repairDuplicateAccountIDs(accounts)
             if repaired.count != accounts.count {
                 accounts = repaired
-                return
             }
             persistAccounts()
             // Pass `accounts` directly — never the shared singleton — since the
