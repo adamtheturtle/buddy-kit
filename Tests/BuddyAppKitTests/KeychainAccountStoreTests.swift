@@ -25,6 +25,7 @@ private struct MockAccount: StorableAccount, Equatable {
 @MainActor
 private func makeStore(
     seed: [MockAccount],
+    onAccountsChanged: @escaping @MainActor ([MockAccount]) -> Void = { _ in },
     onRemoved: @escaping @MainActor (MockAccount) -> Void = { _ in },
     onRekeyed: @escaping @MainActor (MockAccount) -> Void = { _ in }
 ) -> KeychainAccountStore<MockAccount> {
@@ -38,7 +39,7 @@ private func makeStore(
         isTestingMode: true,
         seedForTesting: { seed },
         migrateIfEmpty: { nil },
-        onAccountsChanged: { _ in },
+        onAccountsChanged: onAccountsChanged,
         onCurrentChanged: { _ in },
         onRemoved: onRemoved,
         onRekeyed: onRekeyed,
@@ -90,6 +91,53 @@ struct KeychainAccountStoreTests {
         store.add(a)
         #expect(store.accounts == [a])
         #expect(store.currentAccountID == a.accountID)
+    }
+
+    @Test
+    func `add rejects a duplicate account id`() {
+        let id = UUID()
+        let original = MockAccount(accountID: id, key: "original")
+        let duplicate = MockAccount(accountID: id, key: "duplicate")
+        let store = makeStore(seed: [original])
+
+        #expect(!store.add(duplicate))
+        #expect(store.accounts == [original])
+    }
+
+    @Test
+    func `loaded duplicate ids keep the last snapshot and remain one-to-one`() {
+        let duplicateID = UUID()
+        let survivor = MockAccount(accountID: UUID(), key: "survivor")
+        let repaired = KeychainAccountStore<MockAccount>.repairDuplicateAccountIDs([
+            MockAccount(accountID: duplicateID, key: "old"),
+            survivor,
+            MockAccount(accountID: duplicateID, key: "new")
+        ])
+
+        #expect(repaired == [survivor, MockAccount(accountID: duplicateID, key: "new")])
+
+        let store = makeStore(seed: repaired)
+        store.update(MockAccount(accountID: duplicateID, key: "updated"))
+        #expect(store.accounts.count(where: { $0.accountID == duplicateID }) == 1)
+        #expect(store.accounts.last?.key == "updated")
+
+        store.remove(id: duplicateID)
+        #expect(store.accounts == [survivor])
+    }
+
+    @Test
+    func `assigning duplicate ids publishes the repaired snapshot`() {
+        let duplicateID = UUID()
+        let old = MockAccount(accountID: duplicateID, key: "old")
+        let new = MockAccount(accountID: duplicateID, key: "new")
+        let survivor = MockAccount(accountID: UUID(), key: "survivor")
+        var published: [[MockAccount]] = []
+        let store = makeStore(seed: [], onAccountsChanged: { published.append($0) })
+
+        store.accounts = [old, survivor, new]
+
+        #expect(store.accounts == [survivor, new])
+        #expect(published.last == [survivor, new])
     }
 
     @Test
