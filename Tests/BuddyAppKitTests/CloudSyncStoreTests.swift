@@ -21,6 +21,16 @@ struct CloudSyncStoreTests {
         #expect(!CloudSyncDataSizePolicy.isWithinLimit(Data(), maximumBytes: -1))
     }
 
+    @Test("cloud data writes reject values above the configured byte cap")
+    func dataWriteSizeLimit() {
+        let limit = 8
+
+        let boundaryValue = Data(repeating: 1, count: limit)
+        let oversizedValue = Data(repeating: 1, count: limit + 1)
+        #expect(CloudSyncDataSizePolicy.isWithinLimit(boundaryValue, maximumBytes: limit))
+        #expect(!CloudSyncDataSizePolicy.isWithinLimit(oversizedValue, maximumBytes: limit))
+    }
+
     @Test("stopped observation rejects queued and prior-generation changes")
     func stoppedObservationRejectsStaleWork() throws {
         var state = CloudSyncObservationState()

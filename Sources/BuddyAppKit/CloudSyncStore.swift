@@ -43,8 +43,8 @@ public final class CloudSyncStore {
 
     private init() {}
 
-    /// The largest `Data` value returned by ``data(forKey:)``. Values above this cap
-    /// are treated as unavailable and logged instead of being handed to a decoder.
+    /// The largest `Data` value accepted by mirror operations or returned by
+    /// ``data(forKey:)``. Values above this cap are rejected and logged.
     /// The default matches iCloud KVS's documented total-store byte quota.
     public var maximumDataBytes: Int {
         get { dataByteLimit }
@@ -155,6 +155,7 @@ public final class CloudSyncStore {
     /// Mirrors `data` to iCloud under `key`. No-op when iCloud is unavailable.
     public func mirror(_ data: Data, forKey key: String) {
         guard isAvailable else { return }
+        guard acceptsData(data, forKey: key, operation: "write") else { return }
 
         store.set(data, forKey: key)
     }
@@ -164,12 +165,7 @@ public final class CloudSyncStore {
         guard isAvailable else { return nil }
 
         guard let data = store.data(forKey: key) else { return nil }
-        guard CloudSyncDataSizePolicy.isWithinLimit(data, maximumBytes: dataByteLimit) else {
-            logger.error(
-                "Ignoring oversized iCloud data for key \(key, privacy: .public): \(data.count) bytes exceeds \(self.dataByteLimit)"
-            )
-            return nil
-        }
+        guard acceptsData(data, forKey: key, operation: "read") else { return nil }
         return data
     }
 
@@ -179,6 +175,8 @@ public final class CloudSyncStore {
         guard isAvailable else { return }
 
         if let value {
+            if let data = value as? Data,
+               !acceptsData(data, forKey: key, operation: "write") { return }
             store.set(value, forKey: key)
         } else {
             store.removeObject(forKey: key)
@@ -191,6 +189,16 @@ public final class CloudSyncStore {
         guard isAvailable else { return nil }
 
         return store.object(forKey: key)
+    }
+
+    private func acceptsData(_ data: Data, forKey key: String, operation: String) -> Bool {
+        guard CloudSyncDataSizePolicy.isWithinLimit(data, maximumBytes: dataByteLimit) else {
+            logger.error(
+                "Rejecting oversized iCloud data \(operation, privacy: .public) for key \(key, privacy: .public): \(data.count) bytes exceeds \(self.dataByteLimit)"
+            )
+            return false
+        }
+        return true
     }
 
     private func broadcast(changedKeys: [String]) {
