@@ -26,6 +26,9 @@ public nonisolated struct DiskCache: Sendable {
     /// shared instance behaves identically to a fresh one.
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
+    /// Keeps reads, writes, deletes, and corrupt-file cleanup on this cache instance
+    /// atomic relative to one another, so cleanup can never remove a newer save.
+    private let operationLock = NSLock()
 
     public init(directoryName: String, logger: Logger) {
         self.directoryName = directoryName
@@ -42,6 +45,9 @@ public nonisolated struct DiskCache: Sendable {
     }
 
     public func load<T: Decodable>(_: T.Type, kind: String, account: UUID) -> T? {
+        operationLock.lock()
+        defer { operationLock.unlock() }
+
         guard let url = url(kind: kind, account: account),
               let data = try? Data(contentsOf: url) else { return nil }
 
@@ -50,11 +56,22 @@ public nonisolated struct DiskCache: Sendable {
         } catch {
             let reason = error.localizedDescription
             logger.error("Failed to decode \(kind, privacy: .public) cache: \(reason, privacy: .public)")
+            do {
+                try FileManager.default.removeItem(at: url)
+            } catch {
+                let removalReason = error.localizedDescription
+                logger.error(
+                    "Failed to remove corrupt \(kind, privacy: .public) cache: \(removalReason, privacy: .public)"
+                )
+            }
             return nil
         }
     }
 
     public func save(_ value: some Encodable, kind: String, account: UUID) {
+        operationLock.lock()
+        defer { operationLock.unlock() }
+
         guard let url = url(kind: kind, account: account) else { return }
 
         do {
@@ -67,6 +84,9 @@ public nonisolated struct DiskCache: Sendable {
     }
 
     public func delete(kind: String, account: UUID) {
+        operationLock.lock()
+        defer { operationLock.unlock() }
+
         guard let url = url(kind: kind, account: account) else { return }
 
         try? FileManager.default.removeItem(at: url)
@@ -76,6 +96,9 @@ public nonisolated struct DiskCache: Sendable {
     /// Lets a reader (e.g. the headless MCP server, #520) judge freshness without loading
     /// and decoding the whole snapshot.
     public func modificationDate(kind: String, account: UUID) -> Date? {
+        operationLock.lock()
+        defer { operationLock.unlock() }
+
         guard let url = url(kind: kind, account: account),
               let attributes = try? FileManager.default.attributesOfItem(atPath: url.path) else { return nil }
 

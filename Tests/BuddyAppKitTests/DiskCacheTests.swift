@@ -75,6 +75,22 @@ struct DiskCacheTests {
         #expect(cache.load(Snapshot.self, kind: "pads", account: account) == nil)
     }
 
+    @Test func `a corrupt snapshot is removed after its first failed decode`() throws {
+        let cache = makeCache()
+        let account = UUID()
+        let base = try #require(FileManager.default.urls(
+            for: .applicationSupportDirectory, in: .userDomainMask
+        ).first)
+        let directory = base.appending(path: cache.directoryName, directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let file = directory.appending(path: "pads-\(account.uuidString).json")
+        try Data("not-json".utf8).write(to: file)
+
+        #expect(cache.load(Snapshot.self, kind: "pads", account: account) == nil)
+        #expect(!FileManager.default.fileExists(atPath: file.path))
+        #expect(cache.load(Snapshot.self, kind: "pads", account: account) == nil)
+    }
+
     @Test func `concurrent saves and loads across accounts round-trip`() async {
         // The coders are shared across calls now, and DiskCache is Sendable, so
         // concurrent use has to stay correct (#13).
