@@ -1,5 +1,5 @@
 {
-  "originHash" : "e8539269fd5c2c28155ee51888bae269122c6618f13dafd4c1bb84e7288cc84d",
+  "originHash" : "7aea09b8da39d4a0de37b153212aa818f978e95976f98a80649daabe2ae5c216",
   "pins" : [
     {
       "identity" : "highlightr",
@@ -51,8 +51,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/adamtheturtle/textual",
       "state" : {
-        "revision" : "d7e8e12f84e8b7eefd38996a663331f9ee9d8792",
-        "version" : "0.5.1"
+        "revision" : "b8fa39f6b6e48a834a36547eac1028a4bd1c84df",
+        "version" : "0.6.0"
       }
     }
   ],
