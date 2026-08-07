@@ -15,7 +15,7 @@ consume it unchanged.
 The MCP server scaffolding that lived here (`BuddyMCP`) now ships as the standalone
 [MCPKit](https://github.com/adamtheturtle/MCPKit) package.
 
-The library products are independent — there are no inter-product dependencies, and the
+The library products are independent: there are no inter-product dependencies, and the
 dependency graph is deliberately acyclic.
 
 ## Requirements
