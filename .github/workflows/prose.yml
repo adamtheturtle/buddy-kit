@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v9.0.0
       # ClearProse bans em dashes.  The style package is pinned in
       # ``.vale.ini`` and ``vale sync`` downloads it into the gitignored
