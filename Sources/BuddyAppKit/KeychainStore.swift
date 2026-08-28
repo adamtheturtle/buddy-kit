@@ -22,6 +22,21 @@ public nonisolated enum KeychainReadResult: Sendable, Equatable {
         self == .notFound
     }
 
+    /// Whether an empty accounts snapshot that follows this read may be published —
+    /// which, for an empty snapshot, means deleting the stored item.
+    ///
+    /// Only when the read actually told us the store is empty. A `.failure` yields an
+    /// empty array too, and the Observation macro fires the store's `accounts`
+    /// observer during `init`, so publishing it deleted the item holding every
+    /// configured account and API key on the next launch after a locked keychain, a
+    /// denied access prompt, or a truncated item (#4726).
+    public var allowsDeletingStore: Bool {
+        switch self {
+        case .value, .notFound: true
+        case .failure: false
+        }
+    }
+
     static func classify(status: OSStatus, data: Data?) -> Self {
         switch status {
         case errSecSuccess:

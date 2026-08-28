@@ -171,6 +171,19 @@ public final class KeychainAccountStore<Account: StorableAccount> {
     @ObservationIgnored private let config: Config
     @ObservationIgnored private let writeQueue = SerialWriteQueue()
     @ObservationIgnored private var persistenceResults = PersistenceResultState()
+    /// Set when the launch read failed for a reason other than the item being absent.
+    ///
+    /// A failed read yields an empty `accounts`, and the Observation macro fires the
+    /// `accounts` observer during `init` — so `persistAccounts()` saw an empty array
+    /// and enqueued a delete of the Keychain item holding every configured account and
+    /// API key. A locked login keychain, a denied access prompt after a Debug rebuild,
+    /// `errSecDecode` from a truncated item: any of them wiped the user's accounts on
+    /// the next launch, and the deliberate suppression of empty-store migration was
+    /// defeated by the deletion that followed it. While this stands, an *empty*
+    /// snapshot is never published; it did not come from the user removing anything.
+    /// Cleared by the first non-empty write — an explicit add — after which a genuine
+    /// removal deletes as normal.
+    @ObservationIgnored private var launchReadFailed = false
 
     public init(config: Config) {
         self.config = config
@@ -180,6 +193,7 @@ public final class KeychainAccountStore<Account: StorableAccount> {
             return
         }
         let readResult = config.readAccounts(config.keychain, config.accountsKey)
+        launchReadFailed = !readResult.allowsDeletingStore
         let stored: [Account]
         switch readResult {
         case let .value(data):
@@ -264,6 +278,14 @@ public final class KeychainAccountStore<Account: StorableAccount> {
     private func persistAccounts() {
         guard !config.isTestingMode else { return }
 
+        // An empty snapshot after a failed launch read is not a removal, and deleting
+        // on the strength of it destroys every stored credential (#4726). The read
+        // failure is already surfaced through `readFailureStatus`.
+        if accounts.isEmpty, launchReadFailed {
+            config.logger.error("Refusing to delete the stored accounts after a failed Keychain read")
+            return
+        }
+
         let keychain = config.keychain
         let key = config.accountsKey
         let generation = persistenceResults.schedule()
@@ -280,6 +302,9 @@ public final class KeychainAccountStore<Account: StorableAccount> {
             }
             return
         }
+        // A non-empty snapshot supersedes whatever could not be read, so a later
+        // removal is a genuine one.
+        launchReadFailed = false
         guard let data = config.encode(accounts) else {
             config.logger.error("Failed to encode accounts snapshot")
             if persistenceResults.apply(succeeded: false, generation: generation) {

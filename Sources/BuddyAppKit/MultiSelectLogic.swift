@@ -14,7 +14,25 @@ public enum MultiSelectLogic {
     /// any id still in the set, and `nil` when nothing is selected. This keeps the
     /// detail pane following the last-touched row while several rows stay selected
     /// for a bulk action.
+    ///
+    /// `order` is the rows as displayed. A single ⌘-click adds one id, so the choice
+    /// is unambiguous, but a shift-click range or Select All adds many at once — and
+    /// `Set.first` is hash order, which is seeded per process. Without the displayed
+    /// order the detail pane showed an arbitrary row of the range, differing between
+    /// runs for the same list (#4729). Ids missing from `order` fall back to the
+    /// set's own iteration, so a caller that cannot supply the list still works.
+    public static func primaryID<ID: Hashable>(
+        previous: Set<ID>, current: Set<ID>, order: [ID]
+    ) -> ID? {
+        let added = current.subtracting(previous)
+        let candidates = added.isEmpty ? current : added
+        return order.first(where: candidates.contains) ?? candidates.first
+    }
+
+    /// The order-free form, kept for callers with no displayed list to hand over.
+    ///
+    /// Deterministic only when at most one id was added; see the overload above.
     public static func primaryID<ID: Hashable>(previous: Set<ID>, current: Set<ID>) -> ID? {
-        current.subtracting(previous).first ?? current.first
+        primaryID(previous: previous, current: current, order: [])
     }
 }

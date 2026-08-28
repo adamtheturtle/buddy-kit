@@ -55,3 +55,40 @@ struct BuddyAppKitTests {
         #expect(bad.isMalformed)
     }
 }
+
+@Suite("Multi-selection primary row order")
+struct MultiSelectOrderTests {
+    private let order = ["a", "b", "c", "d", "e"]
+
+    /// A shift-click range or Select All adds many ids at once, and `Set.first` is
+    /// hash order seeded per process — so the detail pane showed an arbitrary row of
+    /// the range, differing between runs for the same list (#4729).
+    @Test func `a range selection takes the first added row in display order`() {
+        #expect(MultiSelectLogic.primaryID(previous: ["a"], current: ["a", "b", "c", "d"],
+                                           order: order) == "b")
+    }
+
+    @Test func `select all takes the first row in display order`() {
+        #expect(MultiSelectLogic.primaryID(previous: [], current: Set(order), order: order) == "a")
+    }
+
+    @Test func `a single added row still wins over the rest of the selection`() {
+        #expect(MultiSelectLogic.primaryID(previous: ["a", "b"], current: ["a", "b", "e"],
+                                           order: order) == "e")
+    }
+
+    @Test func `a deselection falls back to the first remaining row in display order`() {
+        #expect(MultiSelectLogic.primaryID(previous: ["b", "c", "d"], current: ["c", "d"],
+                                           order: order) == "c")
+    }
+
+    @Test func `an empty selection has no primary`() {
+        #expect(MultiSelectLogic.primaryID(previous: ["a"], current: [], order: order) == nil)
+    }
+
+    /// Ids the caller's list does not mention still resolve, so a stale order cannot
+    /// blank the detail pane.
+    @Test func `ids outside the display order still resolve`() {
+        #expect(MultiSelectLogic.primaryID(previous: [], current: ["zz"], order: order) == "zz")
+    }
+}

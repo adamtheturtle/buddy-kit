@@ -34,6 +34,15 @@ public nonisolated struct DiskCache: Sendable {
     private let operationLock = NSLock()
     /// Coordinates the same snapshot across separately constructed cache instances.
     private static let pathLocks = DiskCachePathLocks()
+    /// Application Support is looked up and the cache directory created once per
+    /// process per `directoryName`, not per operation.
+    ///
+    /// `url(kind:account:)` runs on every load, save, delete, and `modificationDate`,
+    /// and a consumer's read path can call it twice — once for a freshness check and
+    /// once for the load. So a `FileManager.urls(for:in:)` lookup and a
+    /// `createDirectory` ran on every cache access, on paths the app hits for each
+    /// list render fallback, prewarm, freshness probe, and background refresh (#4766).
+    private static let directories = DiskCacheDirectories()
 
     public init(directoryName: String, logger: Logger, maximumSnapshotBytes: Int = 10_000_000) {
         self.directoryName = directoryName
@@ -42,17 +51,16 @@ public nonisolated struct DiskCache: Sendable {
     }
 
     private func url(kind: String, account: UUID) -> URL? {
-        guard let base = FileManager.default.urls(for: .applicationSupportDirectory,
-                                                  in: .userDomainMask).first else { return nil }
-        guard let dir = DiskCachePathPolicy.directoryURL(
-            root: base, relativePath: directoryName
-        ), let snapshot = DiskCachePathPolicy.snapshotURL(
-            directory: dir, root: base, kind: kind, account: account
+        guard let resolved = Self.directories.resolve(relativePath: directoryName) else {
+            logger.error("Rejecting unsafe DiskCache path")
+            return nil
+        }
+        guard let snapshot = DiskCachePathPolicy.snapshotURL(
+            directory: resolved.directory, root: resolved.root, kind: kind, account: account
         ) else {
             logger.error("Rejecting unsafe DiskCache path")
             return nil
         }
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return snapshot
     }
 
@@ -117,12 +125,27 @@ public nonisolated struct DiskCache: Sendable {
         guard let url = url(kind: kind, account: account) else { return }
 
         Self.pathLocks.withLock(for: url) {
+            let data: Data
             do {
-                let data = try encoder.encode(value)
-                try data.write(to: url, options: .atomic)
+                data = try encoder.encode(value)
             } catch {
                 let reason = error.localizedDescription
-                logger.error("Failed to write \(kind, privacy: .public) cache: \(reason, privacy: .public)")
+                logger.error("Failed to encode \(kind, privacy: .public) cache: \(reason, privacy: .public)")
+                return
+            }
+            do {
+                try data.write(to: url, options: .atomic)
+            } catch {
+                // The directory is created once per process, so one removed out from
+                // under us would otherwise fail every later save. Recreate and retry
+                // once before reporting (#4766).
+                Self.directories.recreate(relativePath: directoryName)
+                do {
+                    try data.write(to: url, options: .atomic)
+                } catch {
+                    let reason = error.localizedDescription
+                    logger.error("Failed to write \(kind, privacy: .public) cache: \(reason, privacy: .public)")
+                }
             }
         }
     }
@@ -155,17 +178,91 @@ public nonisolated struct DiskCache: Sendable {
     }
 }
 
-/// A bounded process-wide lock pool. Equal standardized paths always select the same
-/// lock, ordering operations across `DiskCache` values without retaining every key.
-private nonisolated final class DiskCachePathLocks: @unchecked Sendable {
-    private let locks = (0 ..< 64).map { _ in NSLock() }
+/// Memoizes each cache directory's resolution and creation for the process.
+private nonisolated final class DiskCacheDirectories: @unchecked Sendable {
+    struct Resolved {
+        let root: URL
+        let directory: URL
+    }
 
-    func withLock<Result>(for url: URL, _ operation: () throws -> Result) rethrows -> Result {
-        let index = Int(UInt(bitPattern: url.standardizedFileURL.path.hashValue) % UInt(locks.count))
-        let lock = locks[index]
+    private let lock = NSLock()
+    private var resolved: [String: Resolved] = [:]
+
+    func resolve(relativePath: String) -> Resolved? {
         lock.lock()
         defer { lock.unlock() }
+
+        if let cached = resolved[relativePath] { return cached }
+
+        guard let root = FileManager.default.urls(for: .applicationSupportDirectory,
+                                                  in: .userDomainMask).first,
+              let directory = DiskCachePathPolicy.directoryURL(root: root, relativePath: relativePath)
+        else { return nil }
+
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let entry = Resolved(root: root, directory: directory)
+        resolved[relativePath] = entry
+        return entry
+    }
+
+    /// Re-creates a memoized directory that has since been removed.
+    func recreate(relativePath: String) {
+        lock.lock()
+        let directory = resolved[relativePath]?.directory
+        lock.unlock()
+        guard let directory else { return }
+
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    }
+}
+
+/// One process-wide lock per snapshot path, ordering operations on the same file
+/// across separately constructed `DiskCache` values.
+///
+/// This was a fixed pool of 64 locks indexed by the path's `hashValue`, so two
+/// unrelated snapshots collided into one lock roughly 1 in 64 times and serialized
+/// against each other for no reason — and because `String.hashValue` is seeded per
+/// process, which pairs collided changed from run to run. Locks are created on
+/// demand and dropped when their last holder leaves, so the table stays as small as
+/// the work in flight rather than retaining a key per snapshot ever touched.
+private nonisolated final class DiskCachePathLocks: @unchecked Sendable {
+    private struct Entry {
+        let lock: NSLock
+        var users: Int
+    }
+
+    private let tableLock = NSLock()
+    private var entries: [String: Entry] = [:]
+
+    func withLock<Result>(for url: URL, _ operation: () throws -> Result) rethrows -> Result {
+        let key = url.standardizedFileURL.path
+        let lock = retainLock(for: key)
+        lock.lock()
+        defer {
+            lock.unlock()
+            releaseLock(for: key)
+        }
         return try operation()
+    }
+
+    private func retainLock(for key: String) -> NSLock {
+        tableLock.lock()
+        defer { tableLock.unlock() }
+
+        var entry = entries[key] ?? Entry(lock: NSLock(), users: 0)
+        entry.users += 1
+        entries[key] = entry
+        return entry.lock
+    }
+
+    private func releaseLock(for key: String) {
+        tableLock.lock()
+        defer { tableLock.unlock() }
+
+        guard var entry = entries[key] else { return }
+
+        entry.users -= 1
+        entries[key] = entry.users > 0 ? entry : nil
     }
 }
 
