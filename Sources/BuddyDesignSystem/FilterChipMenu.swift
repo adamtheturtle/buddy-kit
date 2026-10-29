@@ -9,58 +9,7 @@
 //  saved-search) stay app-side and build on the public `ChipMenuShell`.
 //
 
-#if os(macOS)
-    import AppKit
-#endif
 import SwiftUI
-
-#if os(macOS)
-    /// Strips the AppKit keyboard focus ring from the control backing a button-styled
-    /// `Menu`. SwiftUI's `.focusEffectDisabled()` governs its own focus *effect*, but a
-    /// `Menu` rendered with `.menuStyle(.button)` is hosted by an `NSControl` that draws
-    /// its own `focusRingType` ring — which the SwiftUI modifier doesn't reach, so a
-    /// stray blue box still appears around the chip when it takes keyboard focus (#341).
-    /// Attached via `.background`, the helper sits inside the control's view tree and
-    /// walks up to set `focusRingType = .none` on the hosting views (the same
-    /// walk-up-the-view-tree trick an `NSViewRepresentable` uses to reach its host).
-    private struct FocusRingSuppressor: NSViewRepresentable {
-        func makeNSView(context _: Context) -> NSView {
-            let view = NSView()
-            // The view isn't attached to the control's hierarchy yet at make time.
-            DispatchQueue.main.async { suppress(from: view) }
-            return view
-        }
-
-        func updateNSView(_ nsView: NSView, context _: Context) {
-            // Re-assert in case SwiftUI rebuilt the backing control and reset its ring.
-            DispatchQueue.main.async { suppress(from: nsView) }
-        }
-
-        private func suppress(from view: NSView) {
-            var candidate = view.superview
-            while let current = candidate {
-                current.focusRingType = .none
-                if let control = current as? NSControl {
-                    control.cell?.focusRingType = .none
-                }
-                candidate = current.superview
-            }
-        }
-    }
-#endif
-
-extension View {
-    /// Suppresses the AppKit focus ring drawn by the control hosting this view.
-    /// On iOS there is no AppKit focus ring to strip, so this returns the content
-    /// unchanged.
-    func suppressFocusRing() -> some View {
-        #if os(macOS)
-            background(FocusRingSuppressor())
-        #else
-            self
-        #endif
-    }
-}
 
 /// Shared shell for the menu-backed filter chips. Draws one capsule around a
 /// `Menu` and — when a filter is set — a sibling clear (×) button. The × is a real
@@ -77,6 +26,8 @@ public struct ChipMenuShell<MenuContent: View>: View {
     let labelColor: Color
     var menuDisabled: Bool
     let clearLabel: String
+    let accessibilityTitle: String?
+    let accessibilityValue: String?
     let onClear: () -> Void
     @ViewBuilder var menu: () -> MenuContent
     @Environment(\.colorSchemeContrast) private var contrast
@@ -90,8 +41,10 @@ public struct ChipMenuShell<MenuContent: View>: View {
         labelColor: Color,
         menuDisabled: Bool,
         clearLabel: String,
+        accessibilityTitle: String? = nil,
+        accessibilityValue: String? = nil,
         onClear: @escaping () -> Void,
-        @ViewBuilder menu: @escaping () -> MenuContent
+        @ViewBuilder menu: @escaping () -> MenuContent,
     ) {
         self.icon = icon
         self.text = text
@@ -101,6 +54,8 @@ public struct ChipMenuShell<MenuContent: View>: View {
         self.labelColor = labelColor
         self.menuDisabled = menuDisabled
         self.clearLabel = clearLabel
+        self.accessibilityTitle = accessibilityTitle
+        self.accessibilityValue = accessibilityValue
         self.onClear = onClear
         self.menu = menu
     }
@@ -115,7 +70,9 @@ public struct ChipMenuShell<MenuContent: View>: View {
                     Text(text).font(.callout).lineLimit(1)
                     // Drop the disclosure chevron when active — the × takes the
                     // trailing slot — so the chip doesn't grow a second glyph.
-                    if !isActive { Image(systemName: "chevron.down").font(.caption2).accessibilityHidden(true) }
+                    if !isActive {
+                        Image(systemName: "chevron.down").font(.caption2).accessibilityHidden(true)
+                    }
                 }
                 .contentShape(Rectangle())
             }
@@ -123,13 +80,9 @@ public struct ChipMenuShell<MenuContent: View>: View {
             .buttonStyle(.plain)
             .menuIndicator(.hidden)
             .fixedSize()
-            // Suppress AppKit's rectangular keyboard focus ring: it doesn't follow
-            // the chip's capsule and reads as a stray blue box around the label.
-            // `.focusEffectDisabled()` handles SwiftUI's own focus effect; the button
-            // Menu's backing NSControl draws a separate AppKit ring that needs
-            // `focusRingType = .none` to go away (#341).
-            .focusEffectDisabled()
-            .suppressFocusRing()
+            .accessibilityLabel(accessibilityTitle ?? text)
+            .accessibilityValue(accessibilityValue ?? text)
+            .touchTarget()
             .disabled(menuDisabled)
 
             if isActive {
@@ -139,6 +92,7 @@ public struct ChipMenuShell<MenuContent: View>: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .touchTarget()
                 .accessibilityLabel(clearLabel)
             }
         }
@@ -148,14 +102,14 @@ public struct ChipMenuShell<MenuContent: View>: View {
             glassTint: isActive ? .accentColor : nil,
             fallbackFill: fillColor,
             fallbackStroke: strokeColor,
-            fallbackStrokeWidth: ChipContrast.lineWidth(contrast)
+            fallbackStrokeWidth: ChipContrast.lineWidth(contrast),
         )
         .fixedSize()
     }
 }
 
-/// A categorical filter chip: a labelled menu of mutually exclusive options bound to
-/// an optional selection, with a checkmark on the current choice and a reset row.
+// A categorical filter chip: a labelled menu of mutually exclusive options bound to
+// an optional selection, with a checkmark on the current choice and a reset row.
 
 /// Localized once for the whole process rather than per construction.
 ///
@@ -187,7 +141,7 @@ public struct FilterChipMenu<Option: Hashable>: View {
         selected: Binding<Option?>,
         options: [Option],
         formatter: @escaping (Option) -> String,
-        resetLabel: String = FilterChipDefaults.resetLabel
+        resetLabel: String = FilterChipDefaults.resetLabel,
     ) {
         self.title = title
         self.icon = icon
@@ -228,28 +182,18 @@ public struct FilterChipMenu<Option: Hashable>: View {
             labelColor: labelColor,
             menuDisabled: options.isEmpty,
             clearLabel: clearLabel,
+            accessibilityTitle: title,
+            accessibilityValue: selected.map(formatter) ?? resetLabel,
             onClear: { selected = nil },
             menu: {
-                // The reset row carries the checkmark while nothing is selected, so
-                // exactly one row in the menu is always marked as the current choice.
-                Button {
-                    selected = nil
-                } label: {
-                    if isActive { Text(resetLabel) } else { Label(resetLabel, systemImage: "checkmark") }
-                }
-                if !options.isEmpty { Divider() }
-                ForEach(options, id: \.self) { option in
-                    Button {
-                        selected = option
-                    } label: {
-                        if option == selected {
-                            Label(formatter(option), systemImage: "checkmark")
-                        } else {
-                            Text(formatter(option))
-                        }
+                Picker(title, selection: $selected) {
+                    Text(resetLabel).tag(Option?.none)
+                    ForEach(options, id: \.self) { option in
+                        Text(formatter(option)).tag(Optional(option))
                     }
                 }
-            }
+                .pickerStyle(.inline)
+            },
         )
     }
 }
