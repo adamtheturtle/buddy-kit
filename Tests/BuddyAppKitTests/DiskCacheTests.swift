@@ -41,7 +41,7 @@ struct DiskCacheTests {
     }
 
     private nonisolated static func blockingWait(
-        _ semaphore: DispatchSemaphore, timeout: DispatchTime
+        _ semaphore: DispatchSemaphore, timeout: DispatchTime,
     ) -> DispatchTimeoutResult {
         semaphore.wait(timeout: timeout)
     }
@@ -52,19 +52,19 @@ struct DiskCacheTests {
 
         for unsafeDirectory in ["../outside", "/tmp/outside", "safe//outside", "safe\\outside"] {
             #expect(DiskCachePathPolicy.directoryURL(
-                root: root, relativePath: unsafeDirectory
+                root: root, relativePath: unsafeDirectory,
             ) == nil)
         }
         let directory = try #require(DiskCachePathPolicy.directoryURL(
-            root: root, relativePath: "com.example.app/DataCache"
+            root: root, relativePath: "com.example.app/DataCache",
         ))
         for unsafeKind in ["../pads", "/pads", "nested/pads", "nested\\pads", ".", ".."] {
             #expect(DiskCachePathPolicy.snapshotURL(
-                directory: directory, root: root, kind: unsafeKind, account: account
+                directory: directory, root: root, kind: unsafeKind, account: account,
             ) == nil)
         }
         #expect(DiskCachePathPolicy.snapshotURL(
-            directory: directory, root: root, kind: "pads", account: account
+            directory: directory, root: root, kind: "pads", account: account,
         ) != nil)
     }
 
@@ -129,7 +129,7 @@ struct DiskCacheTests {
             savingCache.save(
                 BlockingSnapshot(encodeStarted: encodeStarted, allowEncode: allowEncode),
                 kind: "pads",
-                account: account
+                account: account,
             )
         }
         let encodeStartResult = await Task.detached {
@@ -156,7 +156,7 @@ struct DiskCacheTests {
         let cache = makeCache()
         let account = UUID()
         let base = try #require(FileManager.default.urls(
-            for: .applicationSupportDirectory, in: .userDomainMask
+            for: .applicationSupportDirectory, in: .userDomainMask,
         ).first)
         let directory = base.appending(path: cache.directoryName, directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -169,26 +169,27 @@ struct DiskCacheTests {
     }
 
     @Test func `an oversized sparse snapshot is rejected without being materialized`() throws {
-        let limit = 1_024
+        let limit = 1024
         let cache = DiskCache(
             directoryName: "BuddyAppKitTests/\(UUID().uuidString)",
             logger: Logger(subsystem: "BuddyAppKitTests", category: "disk-cache"),
-            maximumSnapshotBytes: limit
+            maximumSnapshotBytes: limit,
         )
         let account = UUID()
         let base = try #require(FileManager.default.urls(
-            for: .applicationSupportDirectory, in: .userDomainMask
+            for: .applicationSupportDirectory, in: .userDomainMask,
         ).first)
         let directory = base.appending(path: cache.directoryName, directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let file = directory.appending(path: "pads-\(account.uuidString).json")
         #expect(FileManager.default.createFile(atPath: file.path, contents: nil))
         let handle = try FileHandle(forWritingTo: file)
-        try handle.truncate(atOffset: 64 * 1_024 * 1_024)
+        try handle.truncate(atOffset: 64 * 1024 * 1024)
         try handle.close()
 
         #expect(cache.load(Snapshot.self, kind: "pads", account: account) == nil)
-        #expect(FileManager.default.fileExists(atPath: file.path))
+        #expect(!FileManager.default.fileExists(atPath: file.path))
+        #expect(cache.load(Snapshot.self, kind: "pads", account: account) == nil)
     }
 
     @Test func `shared coders survive sustained concurrent saves and loads`() async {
@@ -203,7 +204,7 @@ struct DiskCacheTests {
                         let value = Snapshot(
                             id: index * 20 + iteration,
                             title: "concurrent \(index)-\(iteration)",
-                            updatedAt: Date(timeIntervalSince1970: Double(iteration))
+                            updatedAt: Date(timeIntervalSince1970: Double(iteration)),
                         )
                         cache.save(value, kind: "pads", account: account)
                         guard cache.load(Snapshot.self, kind: "pads", account: account) == value else {

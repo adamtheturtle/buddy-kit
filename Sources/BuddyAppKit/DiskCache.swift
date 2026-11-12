@@ -56,7 +56,7 @@ public nonisolated struct DiskCache: Sendable {
             return nil
         }
         guard let snapshot = DiskCachePathPolicy.snapshotURL(
-            directory: resolved.directory, root: resolved.root, kind: kind, account: account
+            directory: resolved.directory, root: resolved.root, kind: kind, account: account,
         ) else {
             logger.error("Rejecting unsafe DiskCache path")
             return nil
@@ -82,7 +82,7 @@ public nonisolated struct DiskCache: Sendable {
                 } catch {
                     let removalReason = error.localizedDescription
                     logger.error(
-                        "Failed to remove corrupt \(kind, privacy: .public) cache: \(removalReason, privacy: .public)"
+                        "Failed to remove corrupt \(kind, privacy: .public) cache: \(removalReason, privacy: .public)",
                     )
                 }
                 return nil
@@ -108,8 +108,13 @@ public nonisolated struct DiskCache: Sendable {
 
             guard data.count <= maximumSnapshotBytes else {
                 logger.error(
-                    "Ignoring oversized \(kind, privacy: .public) cache: limit is \(self.maximumSnapshotBytes) bytes"
+                    "Ignoring oversized \(kind, privacy: .public) cache: limit is \(maximumSnapshotBytes) bytes",
                 )
+                do {
+                    try FileManager.default.removeItem(at: url)
+                } catch {
+                    logger.error("Failed to remove oversized cache: \(error.localizedDescription, privacy: .private)")
+                }
                 return nil
             }
             return data
@@ -171,7 +176,7 @@ public nonisolated struct DiskCache: Sendable {
         guard let url = url(kind: kind, account: account) else { return nil }
         return Self.pathLocks.withLock(for: url) {
             guard let attributes = try? FileManager.default.attributesOfItem(
-                atPath: url.path
+                atPath: url.path,
             ) else { return nil }
             return attributes[.modificationDate] as? Date
         }
@@ -179,7 +184,7 @@ public nonisolated struct DiskCache: Sendable {
 }
 
 /// Memoizes each cache directory's resolution and creation for the process.
-private nonisolated final class DiskCacheDirectories: @unchecked Sendable {
+private final nonisolated class DiskCacheDirectories: @unchecked Sendable {
     struct Resolved {
         let root: URL
         let directory: URL
@@ -192,11 +197,13 @@ private nonisolated final class DiskCacheDirectories: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
 
-        if let cached = resolved[relativePath] { return cached }
+        if let cached = resolved[relativePath] {
+            return cached
+        }
 
         guard let root = FileManager.default.urls(for: .applicationSupportDirectory,
                                                   in: .userDomainMask).first,
-              let directory = DiskCachePathPolicy.directoryURL(root: root, relativePath: relativePath)
+            let directory = DiskCachePathPolicy.directoryURL(root: root, relativePath: relativePath)
         else { return nil }
 
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -225,7 +232,7 @@ private nonisolated final class DiskCacheDirectories: @unchecked Sendable {
 /// process, which pairs collided changed from run to run. Locks are created on
 /// demand and dropped when their last holder leaves, so the table stays as small as
 /// the work in flight rather than retaining a key per snapshot ever touched.
-private nonisolated final class DiskCachePathLocks: @unchecked Sendable {
+private final nonisolated class DiskCachePathLocks: @unchecked Sendable {
     private struct Entry {
         let lock: NSLock
         var users: Int
@@ -270,7 +277,7 @@ nonisolated enum DiskCachePathPolicy {
     static func directoryURL(root: URL, relativePath: String) -> URL? {
         guard !relativePath.hasPrefix("/") else { return nil }
         let components = relativePath.split(
-            separator: "/", omittingEmptySubsequences: false
+            separator: "/", omittingEmptySubsequences: false,
         ).map(String.init)
         guard !components.isEmpty, components.allSatisfy(isValidComponent) else { return nil }
 
